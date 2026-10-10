@@ -1,0 +1,12 @@
+{
+	"workspaces": [{ "id": "ws-example", "name": "Example Ventures" }],
+	"principals": [
+		{
+			"id": "partner-1",
+			"displayName": "Example Partner",
+			"workspaceId": "ws-example",
+			"role": "partner",
+			"tokenSha256": "replace-with: printf %s \"$TOKEN\" | sha256sum"
+		}
+	]
+}

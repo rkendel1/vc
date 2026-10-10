@@ -1,0 +1,44 @@
+{
+	"name": "attn-invest",
+	"private": true,
+	"description": "Attn Invest — Jev for Investment Evaluation: versioned investment theses, traceable evidence, bounded Jev judgments and auditable human decisions",
+	"type": "module",
+	"workspaces": ["apps/invest-web"],
+	"scripts": {
+		"start": "bun run build:web && bun invest/start-server.ts",
+		"server": "bun invest/start-server.ts",
+		"dev": "bun --watch invest/start-server.ts",
+		"dev:web": "bun -F @attn/invest-web dev",
+		"build:web": "bun -F @attn/invest-web build",
+		"jev:standin": "bun invest/testing/jev-standin.ts",
+		"seed": "bun invest/scripts/seed-demo.ts",
+		"test": "bun test invest/tests",
+		"typecheck": "tsc -p invest/tsconfig.json && tsc -p apps/invest-web/tsconfig.json",
+		"check:architecture": "bun invest/scripts/check-architecture.ts",
+		"generate": "bun --bun x appport build --config invest/appport.config.ts",
+		"generate:check": "bun --bun x appport build --config invest/appport.config.ts && git diff --exit-code -- invest/appport/manifest.json invest/appport/generated",
+		"doctor": "bun --bun x appport doctor --config invest/appport.config.ts",
+		"quality": "bun invest/quality/run.ts",
+		"e2e:browser": "bun run build:web && bun invest/e2e/browser.e2e.ts",
+		"ci": "bun run typecheck && bun run check:architecture && bun run test && bun run quality",
+		"biome": "bunx --bun @biomejs/biome"
+	},
+	"engines": {
+		"bun": "1.3.13",
+		"node": ">=22"
+	},
+	"packageManager": "bun@1.3.13",
+	"dependencies": {
+		"@appport/sdk": "1.1.19",
+		"@appport/server": "1.0.0",
+		"@feltdb/core": "0.11.7",
+		"pdfjs-dist": "4.10.38"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.5",
+		"@types/bun": "^1.3.13",
+		"appport": "1.1.19",
+		"playwright-core": "1.56.1",
+		"typescript": "5.9.3"
+	}
+}

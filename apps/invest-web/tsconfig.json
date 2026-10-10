@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"useDefineForClassFields": true,
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"skipLibCheck": true,
+		"jsx": "react-jsx",
+		"resolveJsonModule": true,
+		"strict": true,
+		"isolatedModules": true,
+		"noEmit": true
+	},
+	"include": ["src", "../../invest/domain/types.ts", "../../invest/domain/views.ts", "../../invest/appport/generated/client.ts", "../../invest/appport/sdk-compat.d.ts"]
+}

@@ -1,0 +1,3645 @@
+{
+  "protocol": "appport/1",
+  "application": {
+    "id": "com.rkendel1.attn.invest",
+    "name": "Attn Invest",
+    "version": "0.1.0",
+    "description": "Jev for Investment Evaluation: versioned theses, traceable evidence, bounded Jev judgments and auditable human decisions."
+  },
+  "capabilities": [
+    {
+      "name": "appport.manifest",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Returns the application manifest for this deployment.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "application": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "required": [
+              "id",
+              "name",
+              "version"
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "protocol",
+          "application",
+          "capabilities",
+          "events",
+          "transports"
+        ],
+        "title": "AppPortManifest"
+      },
+      "authorization": [],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Returns the application manifest for this deployment.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "protocol": {
+                "type": "string"
+              },
+              "application": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "id",
+                  "name",
+                  "version"
+                ]
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "transports": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "additionalProperties": true,
+            "required": [
+              "protocol",
+              "application",
+              "capabilities",
+              "events",
+              "transports"
+            ],
+            "title": "AppPortManifest"
+          },
+          "authorization": [],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "appport.ping",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Liveness probe. Returns the server time.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "ISO-8601 timestamp",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "timestamp"
+        ]
+      },
+      "authorization": [],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Liveness probe. Returns the server time.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "description": "ISO-8601 timestamp",
+                "format": "date-time"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "timestamp"
+            ]
+          },
+          "authorization": [],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "audit.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Append-only audit history for the caller's workspace, newest first.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "audit.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Append-only audit history for the caller's workspace, newest first.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "entityId": {
+                "type": "string"
+              },
+              "eventType": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "audit.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decision.record",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Records an investment decision. Invest requires every review gate resolved and no failed or unresolved hard gate.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "invest",
+              "decline",
+              "hold",
+              "request_more_diligence"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "expectedSequence": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId",
+          "decision",
+          "rationale",
+          "expectedSequence"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "decision": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "decision"
+        ]
+      },
+      "authorization": [
+        "decision.record"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "evaluationId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Records an investment decision. Invest requires every review gate resolved and no failed or unresolved hard gate.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "invest",
+                  "decline",
+                  "hold",
+                  "request_more_diligence"
+                ]
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "expectedSequence": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId",
+              "decision",
+              "rationale",
+              "expectedSequence"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "decision": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "decision"
+            ]
+          },
+          "authorization": [
+            "decision.record"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "evaluationId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "document.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Ingestion status, issues, hashes and parser identity for one document.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "documentId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "document"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Ingestion status, issues, hashes and parser identity for one document.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "documentId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "documentId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "document": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "document"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "document.link",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A short-lived signed link to the original file (five minutes).",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "documentId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {},
+          "expiresAt": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "expiresAt"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A short-lived signed link to the original file (five minutes).",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "documentId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "documentId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {},
+              "expiresAt": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "url",
+              "expiresAt"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "document.page",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The extracted lines and coordinates of one page, for the source viewer.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "documentId",
+          "page"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "page": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "page"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The extracted lines and coordinates of one page, for the source viewer.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "documentId": {
+                "type": "string"
+              },
+              "page": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "documentId",
+              "page"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "page": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "page"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "document.purge",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Retention control: deletes the original file and extracted page text; evidence claims and hashes remain for audit.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "documentId",
+          "reason"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "document"
+        ]
+      },
+      "authorization": [
+        "document.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "documentId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Retention control: deletes the original file and extracted page text; evidence claims and hashes remain for audit.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "documentId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "documentId",
+              "reason"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "document": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "document"
+            ]
+          },
+          "authorization": [
+            "document.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "documentId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "document.upload",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Uploads a document (base64). Type, extension and PDF signature are checked before parsing; rejected and failed files are recorded with their reasons and no evidence.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "founder_deck",
+              "founder_financials",
+              "founder_other",
+              "third_party_report",
+              "customer_reference",
+              "bank_statement",
+              "audited_financials",
+              "data_room_other"
+            ]
+          },
+          "contentBase64": {
+            "type": "string"
+          },
+          "supersedesDocumentId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "filename",
+          "mediaType",
+          "sourceType",
+          "contentBase64"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "document": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "document"
+        ]
+      },
+      "authorization": [
+        "document.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "startupId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Uploads a document (base64). Type, extension and PDF signature are checked before parsing; rejected and failed files are recorded with their reasons and no evidence.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "mediaType": {
+                "type": "string"
+              },
+              "sourceType": {
+                "type": "string",
+                "enum": [
+                  "founder_deck",
+                  "founder_financials",
+                  "founder_other",
+                  "third_party_report",
+                  "customer_reference",
+                  "bank_statement",
+                  "audited_financials",
+                  "data_room_other"
+                ]
+              },
+              "contentBase64": {
+                "type": "string"
+              },
+              "supersedesDocumentId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "filename",
+              "mediaType",
+              "sourceType",
+              "contentBase64"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "document": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "document"
+            ]
+          },
+          "authorization": [
+            "document.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "startupId"
+          },
+          "timeoutMs": 120000
+        }
+      ]
+    },
+    {
+      "name": "evaluation.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Evaluation report: manifest, findings with reviewer actions applied, open diligence requests, decision history and decision blockers.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "report": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "report"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Evaluation report: manifest, findings with reviewer actions applied, open diligence requests, decision history and decision blockers.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "report": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "report"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evaluation.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Evaluations with status, summary and current decision.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Evaluations with status, summary and current decision.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evaluation.rerun",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Creates a new evaluation linked to its predecessor. The predecessor is never modified.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string"
+          },
+          "thesisVersionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId",
+          "requestKey"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluation": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluation"
+        ]
+      },
+      "authorization": [
+        "evaluation.run"
+      ],
+      "idempotency": "supported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Creates a new evaluation linked to its predecessor. The predecessor is never modified.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              },
+              "requestKey": {
+                "type": "string"
+              },
+              "thesisVersionId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId",
+              "requestKey"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluation": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluation"
+            ]
+          },
+          "authorization": [
+            "evaluation.run"
+          ],
+          "idempotency": "supported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evaluation.start",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Evaluates a startup against an explicitly selected thesis version. Runs asynchronously; poll evaluation.get.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "thesisVersionId": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "thesisVersionId",
+          "requestKey"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluation": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluation"
+        ]
+      },
+      "authorization": [
+        "evaluation.run"
+      ],
+      "idempotency": "supported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Evaluates a startup against an explicitly selected thesis version. Runs asynchronously; poll evaluation.get.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "thesisVersionId": {
+                "type": "string"
+              },
+              "requestKey": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "thesisVersionId",
+              "requestKey"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluation": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluation"
+            ]
+          },
+          "authorization": [
+            "evaluation.run"
+          ],
+          "idempotency": "supported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evaluation.verify",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Independently recomputes the manifest digest, projections, question digests and every policy outcome of a stored evaluation.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "ok": {},
+          "checks": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "checks"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Independently recomputes the manifest digest, projections, question digests and every policy outcome of a stored evaluation.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "ok": {},
+              "checks": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "ok",
+              "checks"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evidence.attach",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Attaches evidence a reviewer verified directly, with how it was verified.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "enum": [
+                  "arr",
+                  "mrr",
+                  "revenue",
+                  "revenue_growth_pct",
+                  "gross_margin_pct",
+                  "net_revenue_retention_pct",
+                  "customers",
+                  "monthly_burn",
+                  "runway_months",
+                  "cash",
+                  "team_size",
+                  "funding_ask",
+                  "pre_money_valuation",
+                  "tam",
+                  "churn_pct"
+                ]
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "value"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "claim",
+          "reference"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "item": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "item"
+        ]
+      },
+      "authorization": [
+        "evidence.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Attaches evidence a reviewer verified directly, with how it was verified.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "claim": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "metric": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "enum": [
+                      "arr",
+                      "mrr",
+                      "revenue",
+                      "revenue_growth_pct",
+                      "gross_margin_pct",
+                      "net_revenue_retention_pct",
+                      "customers",
+                      "monthly_burn",
+                      "runway_months",
+                      "cash",
+                      "team_size",
+                      "funding_ask",
+                      "pre_money_valuation",
+                      "tam",
+                      "churn_pct"
+                    ]
+                  },
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "value"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "claim",
+              "reference"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "item": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "item"
+            ]
+          },
+          "authorization": [
+            "evidence.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evidence.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "One claim's provenance: source document, hash, page and coordinates, and cross-source verification.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evidenceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evidenceId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "item": {},
+          "document": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "item",
+          "document"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "One claim's provenance: source document, hash, page and coordinates, and cross-source verification.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evidenceId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evidenceId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "item": {},
+              "document": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "item",
+              "document"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "evidence.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Claims for a startup with provenance, derived verification and contradictions.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {},
+          "contradictions": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "contradictions"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Claims for a startup with provenance, derived verification and contradictions.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {},
+              "contradictions": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items",
+              "contradictions"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "review.record",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Accept a finding, override its outcome (outcome and reason required), or comment. Findings are never edited.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "findingId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "override",
+              "comment"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "partially_supported",
+              "contradicted",
+              "insufficient_evidence",
+              "not_applicable",
+              "evaluation_failed"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId",
+          "findingId",
+          "action"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "action"
+        ]
+      },
+      "authorization": [
+        "review.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "evaluationId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Accept a finding, override its outcome (outcome and reason required), or comment. Findings are never edited.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              },
+              "findingId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "accept",
+                  "override",
+                  "comment"
+                ]
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "supported",
+                  "partially_supported",
+                  "contradicted",
+                  "insufficient_evidence",
+                  "not_applicable",
+                  "evaluation_failed"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId",
+              "findingId",
+              "action"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "action": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "action"
+            ]
+          },
+          "authorization": [
+            "review.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "evaluationId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "review.request",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Opens a diligence request (follow-up), optionally tied to a finding and assigned to someone.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "findingId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId",
+          "question"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "action"
+        ]
+      },
+      "authorization": [
+        "review.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Opens a diligence request (follow-up), optionally tied to a finding and assigned to someone.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              },
+              "findingId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "question": {
+                "type": "string"
+              },
+              "assignee": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId",
+              "question"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "action": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "action"
+            ]
+          },
+          "authorization": [
+            "review.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "review.resolve",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Resolves a diligence request. A request can be resolved exactly once.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId",
+          "requestId",
+          "resolution"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "action"
+        ]
+      },
+      "authorization": [
+        "review.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Resolves a diligence request. A request can be resolved exactly once.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "resolution": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId",
+              "requestId",
+              "resolution"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "action": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "action"
+            ]
+          },
+          "authorization": [
+            "review.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "session.whoami",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The authenticated principal, its workspace and permissions, and the configured Jev identity (never credentials).",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "principal": {},
+          "jev": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "principal",
+          "jev"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The authenticated principal, its workspace and permissions, and the configured Jev identity (never credentials).",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "principal": {},
+              "jev": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "principal",
+              "jev"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "startup.create",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Creates a startup profile. Founder claims are recorded as founder-reported evidence.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "sector": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "founderClaims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "startup": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "startup"
+        ]
+      },
+      "authorization": [
+        "startup.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Creates a startup profile. Founder claims are recorded as founder-reported evidence.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "website": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "sector": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "founderClaims": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "startup": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "startup"
+            ]
+          },
+          "authorization": [
+            "startup.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "startup.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Startup and evidence workspace: profile, documents, evidence with provenance, contradictions, evaluations, decisions, and gaps against an optional thesis version.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "thesisVersionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "workspace": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "workspace"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Startup and evidence workspace: profile, documents, evidence with provenance, contradictions, evaluations, decisions, and gaps against an optional thesis version.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "thesisVersionId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "workspace": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "workspace"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "startup.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Startups in the caller's workspace.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Startups in the caller's workspace.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "startup.update",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Updates a startup profile, fenced on expectedVersion.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "sector": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "founderClaims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "expectedVersion",
+          "name"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "startup": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "startup"
+        ]
+      },
+      "authorization": [
+        "startup.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "startupId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Updates a startup profile, fenced on expectedVersion.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "website": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "sector": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "founderClaims": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "expectedVersion",
+              "name"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "startup": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "startup"
+            ]
+          },
+          "authorization": [
+            "startup.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "startupId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.approve",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Freezes the draft as the next immutable version. Previous versions are never modified.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "thesisId": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesisId",
+          "expectedVersion"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "thesis": {},
+          "version": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesis",
+          "version"
+        ]
+      },
+      "authorization": [
+        "thesis.approve"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "thesisId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Freezes the draft as the next immutable version. Previous versions are never modified.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "thesisId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesisId",
+              "expectedVersion"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "thesis": {},
+              "version": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesis",
+              "version"
+            ]
+          },
+          "authorization": [
+            "thesis.approve"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "thesisId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.create",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Creates a thesis with a draft. Nothing is evaluable until a version is approved.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "requirement": {
+                  "type": "string"
+                },
+                "evaluationMode": {
+                  "type": "string",
+                  "enum": [
+                    "semantic",
+                    "deterministic",
+                    "human_review"
+                  ]
+                },
+                "importance": {
+                  "type": "number"
+                },
+                "requiredEvidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 20
+                },
+                "threshold": {
+                  "type": "number"
+                },
+                "hardGate": {
+                  "type": "boolean"
+                },
+                "missingEvidencePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "unknown",
+                    "review_required"
+                  ]
+                },
+                "disqualifier": {
+                  "type": "string"
+                },
+                "metric": {
+                  "type": "string",
+                  "enum": [
+                    "arr",
+                    "mrr",
+                    "revenue",
+                    "revenue_growth_pct",
+                    "gross_margin_pct",
+                    "net_revenue_retention_pct",
+                    "customers",
+                    "monthly_burn",
+                    "runway_months",
+                    "cash",
+                    "team_size",
+                    "funding_ask",
+                    "pre_money_valuation",
+                    "tam",
+                    "churn_pct"
+                  ]
+                },
+                "comparator": {
+                  "type": "string",
+                  "enum": [
+                    "gte",
+                    "gt",
+                    "lte",
+                    "lt",
+                    "eq"
+                  ]
+                },
+                "evidenceStandard": {
+                  "type": "string",
+                  "enum": [
+                    "founder_reported_ok",
+                    "independent_required"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "name",
+                "requirement",
+                "evaluationMode",
+                "importance",
+                "requiredEvidence",
+                "hardGate",
+                "missingEvidencePolicy"
+              ]
+            },
+            "maxItems": 50
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "showWeightedSummary": {
+                "type": "boolean"
+              },
+              "reviewConfidenceThreshold": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "showWeightedSummary",
+              "reviewConfidenceThreshold"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "criteria"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "thesis": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesis"
+        ]
+      },
+      "authorization": [
+        "thesis.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Creates a thesis with a draft. Nothing is evaluable until a version is approved.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "criteria": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "requirement": {
+                      "type": "string"
+                    },
+                    "evaluationMode": {
+                      "type": "string",
+                      "enum": [
+                        "semantic",
+                        "deterministic",
+                        "human_review"
+                      ]
+                    },
+                    "importance": {
+                      "type": "number"
+                    },
+                    "requiredEvidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 20
+                    },
+                    "threshold": {
+                      "type": "number"
+                    },
+                    "hardGate": {
+                      "type": "boolean"
+                    },
+                    "missingEvidencePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "review_required"
+                      ]
+                    },
+                    "disqualifier": {
+                      "type": "string"
+                    },
+                    "metric": {
+                      "type": "string",
+                      "enum": [
+                        "arr",
+                        "mrr",
+                        "revenue",
+                        "revenue_growth_pct",
+                        "gross_margin_pct",
+                        "net_revenue_retention_pct",
+                        "customers",
+                        "monthly_burn",
+                        "runway_months",
+                        "cash",
+                        "team_size",
+                        "funding_ask",
+                        "pre_money_valuation",
+                        "tam",
+                        "churn_pct"
+                      ]
+                    },
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "gte",
+                        "gt",
+                        "lte",
+                        "lt",
+                        "eq"
+                      ]
+                    },
+                    "evidenceStandard": {
+                      "type": "string",
+                      "enum": [
+                        "founder_reported_ok",
+                        "independent_required"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "name",
+                    "requirement",
+                    "evaluationMode",
+                    "importance",
+                    "requiredEvidence",
+                    "hardGate",
+                    "missingEvidencePolicy"
+                  ]
+                },
+                "maxItems": 50
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "showWeightedSummary": {
+                    "type": "boolean"
+                  },
+                  "reviewConfidenceThreshold": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "showWeightedSummary",
+                  "reviewConfidenceThreshold"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "criteria"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "thesis": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesis"
+            ]
+          },
+          "authorization": [
+            "thesis.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.draft.discard",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Discards the draft of a thesis that already has an approved version.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "thesisId": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesisId",
+          "expectedVersion"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "thesis": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesis"
+        ]
+      },
+      "authorization": [
+        "thesis.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "thesisId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Discards the draft of a thesis that already has an approved version.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "thesisId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesisId",
+              "expectedVersion"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "thesis": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesis"
+            ]
+          },
+          "authorization": [
+            "thesis.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "thesisId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.draft.update",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Replaces the draft. Fenced on expectedVersion; a stale editor gets CONFLICT instead of overwriting.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "thesisId": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "requirement": {
+                  "type": "string"
+                },
+                "evaluationMode": {
+                  "type": "string",
+                  "enum": [
+                    "semantic",
+                    "deterministic",
+                    "human_review"
+                  ]
+                },
+                "importance": {
+                  "type": "number"
+                },
+                "requiredEvidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 20
+                },
+                "threshold": {
+                  "type": "number"
+                },
+                "hardGate": {
+                  "type": "boolean"
+                },
+                "missingEvidencePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "unknown",
+                    "review_required"
+                  ]
+                },
+                "disqualifier": {
+                  "type": "string"
+                },
+                "metric": {
+                  "type": "string",
+                  "enum": [
+                    "arr",
+                    "mrr",
+                    "revenue",
+                    "revenue_growth_pct",
+                    "gross_margin_pct",
+                    "net_revenue_retention_pct",
+                    "customers",
+                    "monthly_burn",
+                    "runway_months",
+                    "cash",
+                    "team_size",
+                    "funding_ask",
+                    "pre_money_valuation",
+                    "tam",
+                    "churn_pct"
+                  ]
+                },
+                "comparator": {
+                  "type": "string",
+                  "enum": [
+                    "gte",
+                    "gt",
+                    "lte",
+                    "lt",
+                    "eq"
+                  ]
+                },
+                "evidenceStandard": {
+                  "type": "string",
+                  "enum": [
+                    "founder_reported_ok",
+                    "independent_required"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "name",
+                "requirement",
+                "evaluationMode",
+                "importance",
+                "requiredEvidence",
+                "hardGate",
+                "missingEvidencePolicy"
+              ]
+            },
+            "maxItems": 50
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "showWeightedSummary": {
+                "type": "boolean"
+              },
+              "reviewConfidenceThreshold": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "showWeightedSummary",
+              "reviewConfidenceThreshold"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesisId",
+          "expectedVersion",
+          "criteria"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "thesis": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesis"
+        ]
+      },
+      "authorization": [
+        "thesis.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "thesisId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Replaces the draft. Fenced on expectedVersion; a stale editor gets CONFLICT instead of overwriting.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "thesisId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "criteria": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "requirement": {
+                      "type": "string"
+                    },
+                    "evaluationMode": {
+                      "type": "string",
+                      "enum": [
+                        "semantic",
+                        "deterministic",
+                        "human_review"
+                      ]
+                    },
+                    "importance": {
+                      "type": "number"
+                    },
+                    "requiredEvidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 20
+                    },
+                    "threshold": {
+                      "type": "number"
+                    },
+                    "hardGate": {
+                      "type": "boolean"
+                    },
+                    "missingEvidencePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "review_required"
+                      ]
+                    },
+                    "disqualifier": {
+                      "type": "string"
+                    },
+                    "metric": {
+                      "type": "string",
+                      "enum": [
+                        "arr",
+                        "mrr",
+                        "revenue",
+                        "revenue_growth_pct",
+                        "gross_margin_pct",
+                        "net_revenue_retention_pct",
+                        "customers",
+                        "monthly_burn",
+                        "runway_months",
+                        "cash",
+                        "team_size",
+                        "funding_ask",
+                        "pre_money_valuation",
+                        "tam",
+                        "churn_pct"
+                      ]
+                    },
+                    "comparator": {
+                      "type": "string",
+                      "enum": [
+                        "gte",
+                        "gt",
+                        "lte",
+                        "lt",
+                        "eq"
+                      ]
+                    },
+                    "evidenceStandard": {
+                      "type": "string",
+                      "enum": [
+                        "founder_reported_ok",
+                        "independent_required"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "name",
+                    "requirement",
+                    "evaluationMode",
+                    "importance",
+                    "requiredEvidence",
+                    "hardGate",
+                    "missingEvidencePolicy"
+                  ]
+                },
+                "maxItems": 50
+              },
+              "settings": {
+                "type": "object",
+                "properties": {
+                  "showWeightedSummary": {
+                    "type": "boolean"
+                  },
+                  "reviewConfidenceThreshold": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "showWeightedSummary",
+                  "reviewConfidenceThreshold"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesisId",
+              "expectedVersion",
+              "criteria"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "thesis": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesis"
+            ]
+          },
+          "authorization": [
+            "thesis.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "thesisId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A thesis with its draft and every approved version.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "thesisId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesisId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "thesis": {},
+          "versions": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "thesis",
+          "versions"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A thesis with its draft and every approved version.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "thesisId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesisId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "thesis": {},
+              "versions": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "thesis",
+              "versions"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Theses in the caller's workspace.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Theses in the caller's workspace.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.validate",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Validates criteria and settings without storing anything.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "criteria": {
+            "type": "array",
+            "items": {},
+            "maxItems": 50
+          },
+          "settings": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "criteria",
+          "settings"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "valid": {},
+          "errors": {},
+          "warnings": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "valid",
+          "errors",
+          "warnings"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Validates criteria and settings without storing anything.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "criteria": {
+                "type": "array",
+                "items": {},
+                "maxItems": 50
+              },
+              "settings": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "criteria",
+              "settings"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "valid": {},
+              "errors": {},
+              "warnings": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "valid",
+              "errors",
+              "warnings"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.version.compare",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Criterion-level differences between two versions, or between a version and the current draft.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "fromVersionId": {
+            "type": "string"
+          },
+          "toVersionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fromVersionId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {},
+          "to": {},
+          "changes": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "changes"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Criterion-level differences between two versions, or between a version and the current draft.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "fromVersionId": {
+                "type": "string"
+              },
+              "toVersionId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "fromVersionId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "from": {},
+              "to": {},
+              "changes": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "changes"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "thesis.version.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "One immutable thesis version.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "versionId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "version": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "One immutable thesis version.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "versionId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "versionId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "version": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "version"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "workspace.overview",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Active evaluations, outstanding reviews, recently completed assessments and startups awaiting evidence.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "overview": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "overview"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Active evaluations, outstanding reviews, recently completed assessments and startups awaiting evidence.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "overview": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "overview"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    }
+  ],
+  "events": [],
+  "transports": [],
+  "conformance": 1
+}

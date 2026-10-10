@@ -1,0 +1,41 @@
+name: ci
+
+# Typecheck, architecture invariants, domain/boundary/
+# isolation tests, contract freshness, the labelled quality gate, and the browser end-to-end flow.
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Certify
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: "1.3.13"
+            - run: bun install --frozen-lockfile
+            - name: Typecheck server and web app
+              run: bun run typecheck
+            - name: Architecture invariants
+              run: bun run check:architecture
+            - name: AppPort contract is current
+              run: bun run generate:check
+            - name: AppPort doctor
+              run: bun run doctor
+            - name: Domain, ingestion, evaluation, decision, boundary and isolation tests
+              run: bun run test
+            - name: Quality gate (labelled cases; zero false support, every evaluation verifies)
+              run: bun run quality
+            - name: Install Chromium for the browser test
+              run: bunx playwright-core install chromium
+            - name: Browser end-to-end
+              run: CHROMIUM_PATH=$(find ~/.cache/ms-playwright -path '*chrome-linux/chrome' | head -1) bun run e2e:browser

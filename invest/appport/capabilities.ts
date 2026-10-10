@@ -1,0 +1,596 @@
+import { type CapabilityContext, defineCapability, errors, s } from "@appport/sdk";
+import { InvestError } from "../domain/errors.ts";
+import { METRIC_KEYS, OUTCOMES, SOURCE_TYPES, type Actor, type InvestmentCriterion, type ThesisSettings } from "../domain/types.ts";
+import { validateThesisContent } from "../modules/investment-thesis.ts";
+import type { InvestmentService } from "../service.ts";
+
+/**
+ * The declared AppPort surface of the investment application. Handlers are thin: resolve the
+ * actor from the authenticated session, call one service operation, map domain errors.
+ *
+ * Workspace identity is taken only from `session.attributes.tenantId`, set by the AuthBoundry
+ * adapter. No capability accepts a workspace id, so a caller cannot address another workspace by
+ * changing an input; a foreign record id resolves to NOT_FOUND exactly like a missing one.
+ *
+ * Failure contract (all capabilities): UNAUTHORIZED without a valid credential; FORBIDDEN without
+ * the listed permission; INVALID_INPUT for schema or domain validation failures (details carry
+ * field paths); NOT_FOUND for absent or foreign records; CONFLICT for lost races, stale
+ * `expectedVersion`/`expectedSequence`, or unmet preconditions (details.reason = "precondition");
+ * PAYLOAD_TOO_LARGE for uploads over DOCUMENT_MAX_BYTES; INTERNAL for anything else (sanitised).
+ */
+
+function service(context: CapabilityContext): InvestmentService {
+	const svc = context.services.invest as InvestmentService | undefined;
+	if (!svc) throw errors.internal("Investment service is unavailable");
+	return svc;
+}
+
+export function actorFrom(context: CapabilityContext): Actor {
+	const session = context.session;
+	const workspaceId = session?.attributes?.tenantId;
+	if (!session?.principal?.id || typeof workspaceId !== "string" || !workspaceId) throw errors.unauthorized("An authenticated workspace session is required");
+	const displayName = typeof session.attributes?.displayName === "string" ? session.attributes.displayName : session.principal.id;
+	return { principalId: session.principal.id, displayName, workspaceId, permissions: session.permissions ?? [] };
+}
+
+function mapError(error: unknown): never {
+	if (error instanceof InvestError) {
+		const details = (error.details ?? undefined) as never;
+		switch (error.code) {
+			case "invalid":
+				throw errors.invalidInput(error.message, details);
+			case "not_found":
+				throw errors.notFound(error.message);
+			case "conflict":
+				throw errors.conflict(error.message, details);
+			case "precondition":
+				throw errors.conflict(error.message, { reason: "precondition", ...((error.details as object) ?? {}) } as never);
+			case "forbidden":
+				throw errors.forbidden(error.message);
+			case "too_large":
+				throw errors.payloadTooLarge(error.message);
+			default:
+				throw errors.internal("The operation could not be completed");
+		}
+	}
+	throw error;
+}
+
+function run<I, O>(fn: (svc: InvestmentService, actor: Actor, input: I) => Promise<O>) {
+	return async (input: I, context: CapabilityContext): Promise<O> => {
+		const actor = actorFrom(context);
+		try {
+			return await fn(service(context), actor, input);
+		} catch (error) {
+			mapError(error);
+		}
+	};
+}
+
+const id = () => s.string();
+const out = (...keys: string[]) => s.object(Object.fromEntries(keys.map((k) => [k, s.unknown()])));
+const contract = (idempotency: string, notes?: string) => ({ idempotency, ...(notes ? { notes } : {}) });
+
+const criterion = s.object({
+	id: s.string(),
+	name: s.string(),
+	requirement: s.string(),
+	evaluationMode: s.enum(["semantic", "deterministic", "human_review"]),
+	importance: s.number(),
+	requiredEvidence: s.array(s.string(), { maxItems: 20 }),
+	threshold: s.optional(s.number()),
+	hardGate: s.boolean(),
+	missingEvidencePolicy: s.enum(["unknown", "review_required"]),
+	disqualifier: s.optional(s.string()),
+	metric: s.optional(s.enum(METRIC_KEYS)),
+	comparator: s.optional(s.enum(["gte", "gt", "lte", "lt", "eq"])),
+	evidenceStandard: s.optional(s.enum(["founder_reported_ok", "independent_required"])),
+});
+const settings = s.object({ showWeightedSummary: s.boolean(), reviewConfidenceThreshold: s.number() });
+const asCriteria = (c: unknown) => c as InvestmentCriterion[];
+const asSettings = (v: unknown) => v as ThesisSettings | undefined;
+
+// ---------------------------------------------------------------------------
+// session / workspace
+// ---------------------------------------------------------------------------
+
+export const sessionWhoami = defineCapability({
+	name: "session.whoami",
+	version: 1,
+	description: "The authenticated principal, its workspace and permissions, and the configured Jev identity (never credentials).",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("principal", "jev"),
+	attributes: contract("read-only"),
+	handler: (_input, context) => {
+		const actor = actorFrom(context);
+		return {
+			principal: { ...actor, workspaceName: context.session?.attributes?.workspaceName ?? actor.workspaceId, role: context.session?.attributes?.role ?? null },
+			jev: service(context).jevIdentity,
+		};
+	},
+});
+
+export const workspaceOverview = defineCapability({
+	name: "workspace.overview",
+	version: 1,
+	description: "Active evaluations, outstanding reviews, recently completed assessments and startups awaiting evidence.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("overview"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ overview: await svc.overview(actor) })),
+});
+
+// ---------------------------------------------------------------------------
+// investment-thesis
+// ---------------------------------------------------------------------------
+
+export const thesisList = defineCapability({
+	name: "thesis.list",
+	version: 1,
+	description: "Theses in the caller's workspace.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.theses.list(actor) })),
+});
+
+export const thesisGet = defineCapability({
+	name: "thesis.get",
+	version: 1,
+	description: "A thesis with its draft and every approved version.",
+	authorization: ["invest.read"],
+	input: s.object({ thesisId: id() }),
+	output: out("thesis", "versions"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { thesisId: string }) => ({ thesis: await svc.theses.get(actor, input.thesisId), versions: await svc.theses.listVersions(actor, input.thesisId) })),
+});
+
+export const thesisCreate = defineCapability({
+	name: "thesis.create",
+	version: 1,
+	description: "Creates a thesis with a draft. Nothing is evaluable until a version is approved.",
+	authorization: ["thesis.write"],
+	input: s.object({ name: s.string(), description: s.optional(s.string()), criteria: s.array(criterion, { maxItems: 50 }), settings: s.optional(settings) }),
+	output: out("thesis"),
+	attributes: contract("not idempotent: each call creates a thesis"),
+	handler: run(async (svc, actor, input: { name: string; description?: string; criteria: unknown; settings?: unknown }) => ({
+		thesis: await svc.theses.createDraft(actor, { name: input.name, description: input.description, criteria: asCriteria(input.criteria), settings: asSettings(input.settings) }),
+	})),
+});
+
+export const thesisDraftUpdate = defineCapability({
+	name: "thesis.draft.update",
+	version: 1,
+	description: "Replaces the draft. Fenced on expectedVersion; a stale editor gets CONFLICT instead of overwriting.",
+	authorization: ["thesis.write"],
+	concurrency: { mode: "keyed", key: "thesisId" },
+	input: s.object({
+		thesisId: id(),
+		expectedVersion: s.integer(),
+		name: s.optional(s.string()),
+		description: s.optional(s.string()),
+		criteria: s.array(criterion, { maxItems: 50 }),
+		settings: s.optional(settings),
+	}),
+	output: out("thesis"),
+	attributes: contract("version-fenced: replaying with the same expectedVersion after success yields CONFLICT"),
+	handler: run(async (svc, actor, input: { thesisId: string; expectedVersion: number; name?: string; description?: string; criteria: unknown; settings?: unknown }) => ({
+		thesis: await svc.theses.updateDraft(actor, { ...input, criteria: asCriteria(input.criteria), settings: asSettings(input.settings) }),
+	})),
+});
+
+export const thesisDraftDiscard = defineCapability({
+	name: "thesis.draft.discard",
+	version: 1,
+	description: "Discards the draft of a thesis that already has an approved version.",
+	authorization: ["thesis.write"],
+	concurrency: { mode: "keyed", key: "thesisId" },
+	input: s.object({ thesisId: id(), expectedVersion: s.integer() }),
+	output: out("thesis"),
+	attributes: contract("idempotent: discarding an absent draft is a no-op"),
+	handler: run(async (svc, actor, input: { thesisId: string; expectedVersion: number }) => ({ thesis: await svc.theses.discardDraft(actor, input) })),
+});
+
+export const thesisValidate = defineCapability({
+	name: "thesis.validate",
+	version: 1,
+	description: "Validates criteria and settings without storing anything.",
+	authorization: ["invest.read"],
+	input: s.object({ criteria: s.array(s.unknown(), { maxItems: 50 }), settings: s.unknown() }),
+	output: out("valid", "errors", "warnings"),
+	attributes: contract("pure"),
+	handler: run(async (_svc, _actor, input: { criteria: unknown; settings: unknown }) => validateThesisContent(input.criteria, input.settings)),
+});
+
+export const thesisApprove = defineCapability({
+	name: "thesis.approve",
+	version: 1,
+	description: "Freezes the draft as the next immutable version. Previous versions are never modified.",
+	authorization: ["thesis.approve"],
+	concurrency: { mode: "keyed", key: "thesisId" },
+	input: s.object({ thesisId: id(), expectedVersion: s.integer(), note: s.optional(s.string()) }),
+	output: out("thesis", "version"),
+	attributes: contract("version-fenced and requireAbsent on the new version: two concurrent approvals cannot both succeed"),
+	handler: run(async (svc, actor, input: { thesisId: string; expectedVersion: number; note?: string }) => svc.theses.approve(actor, input)),
+});
+
+export const thesisVersionGet = defineCapability({
+	name: "thesis.version.get",
+	version: 1,
+	description: "One immutable thesis version.",
+	authorization: ["invest.read"],
+	input: s.object({ versionId: id() }),
+	output: out("version"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { versionId: string }) => ({ version: await svc.theses.getVersion(actor, input.versionId) })),
+});
+
+export const thesisVersionCompare = defineCapability({
+	name: "thesis.version.compare",
+	version: 1,
+	description: "Criterion-level differences between two versions, or between a version and the current draft.",
+	authorization: ["invest.read"],
+	input: s.object({ fromVersionId: id(), toVersionId: s.optional(id()) }),
+	output: out("from", "to", "changes"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { fromVersionId: string; toVersionId?: string }) => svc.theses.compare(actor, input)),
+});
+
+// ---------------------------------------------------------------------------
+// startup-registry
+// ---------------------------------------------------------------------------
+
+const startupFields = {
+	name: s.string(),
+	website: s.optional(s.string()),
+	stage: s.optional(s.string()),
+	sector: s.optional(s.string()),
+	description: s.optional(s.string()),
+	founderClaims: s.optional(s.array(s.string(), { maxItems: 50 })),
+};
+
+export const startupList = defineCapability({
+	name: "startup.list",
+	version: 1,
+	description: "Startups in the caller's workspace.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.startups.list(actor) })),
+});
+
+export const startupGet = defineCapability({
+	name: "startup.get",
+	version: 1,
+	description: "Startup and evidence workspace: profile, documents, evidence with provenance, contradictions, evaluations, decisions, and gaps against an optional thesis version.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id(), thesisVersionId: s.optional(id()) }),
+	output: out("workspace"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string; thesisVersionId?: string }) => ({ workspace: await svc.startupWorkspace(actor, input) })),
+});
+
+export const startupCreate = defineCapability({
+	name: "startup.create",
+	version: 1,
+	description: "Creates a startup profile. Founder claims are recorded as founder-reported evidence.",
+	authorization: ["startup.write"],
+	input: s.object(startupFields),
+	output: out("startup"),
+	attributes: contract("not idempotent: each call creates a startup"),
+	handler: run(async (svc, actor, input: { name: string }) => ({ startup: await svc.startups.create(actor, input) })),
+});
+
+export const startupUpdate = defineCapability({
+	name: "startup.update",
+	version: 1,
+	description: "Updates a startup profile, fenced on expectedVersion.",
+	authorization: ["startup.write"],
+	concurrency: { mode: "keyed", key: "startupId" },
+	input: s.object({ startupId: id(), expectedVersion: s.integer(), ...startupFields }),
+	output: out("startup"),
+	attributes: contract("version-fenced"),
+	handler: run(async (svc, actor, input: { startupId: string; expectedVersion: number; name: string }) => ({ startup: await svc.startups.update(actor, input) })),
+});
+
+// ---------------------------------------------------------------------------
+// document-ingestion
+// ---------------------------------------------------------------------------
+
+export function createDocumentUpload(maxBytes: number) {
+	return defineCapability({
+		name: "document.upload",
+		version: 1,
+		description:
+			"Uploads a document (base64). Type, extension and PDF signature are checked before parsing; rejected and failed files are recorded with their reasons and no evidence.",
+		authorization: ["document.write"],
+		concurrency: { mode: "keyed", key: "startupId" },
+		timeoutMs: 120_000,
+		input: s.object({
+			startupId: id(),
+			filename: s.string(),
+			mediaType: s.string(),
+			sourceType: s.enum(SOURCE_TYPES),
+			contentBase64: s.string(),
+			supersedesDocumentId: s.optional(id()),
+		}),
+		output: out("document"),
+		attributes: contract("content-addressed: the same bytes for the same startup return the existing document", `max ${maxBytes} bytes`),
+		handler: run(async (svc, actor, input: { startupId: string; filename: string; mediaType: string; sourceType: (typeof SOURCE_TYPES)[number]; contentBase64: string; supersedesDocumentId?: string }) => {
+			if (Math.floor((input.contentBase64.length * 3) / 4) > maxBytes + 3) throw new InvestError("too_large", `The file exceeds the ${maxBytes}-byte limit`);
+			if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.contentBase64)) throw new InvestError("invalid", "contentBase64 is not valid base64");
+			const bytes = new Uint8Array(Buffer.from(input.contentBase64, "base64"));
+			return { document: await svc.documents.upload(actor, { ...input, bytes }) };
+		}),
+	});
+}
+
+export const documentGet = defineCapability({
+	name: "document.get",
+	version: 1,
+	description: "Ingestion status, issues, hashes and parser identity for one document.",
+	authorization: ["invest.read"],
+	input: s.object({ documentId: id() }),
+	output: out("document"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { documentId: string }) => ({ document: await svc.documents.get(actor, input.documentId) })),
+});
+
+export const documentPage = defineCapability({
+	name: "document.page",
+	version: 1,
+	description: "The extracted lines and coordinates of one page, for the source viewer.",
+	authorization: ["invest.read"],
+	input: s.object({ documentId: id(), page: s.integer() }),
+	output: out("page"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { documentId: string; page: number }) => ({ page: await svc.documents.page(actor, input.documentId, input.page) })),
+});
+
+export const documentLink = defineCapability({
+	name: "document.link",
+	version: 1,
+	description: "A short-lived signed link to the original file (five minutes).",
+	authorization: ["invest.read"],
+	input: s.object({ documentId: id() }),
+	output: out("url", "expiresAt"),
+	attributes: contract("each call issues a fresh link"),
+	handler: run(async (svc, actor, input: { documentId: string }) => svc.documents.accessLink(actor, input.documentId)),
+});
+
+export const documentPurge = defineCapability({
+	name: "document.purge",
+	version: 1,
+	description: "Retention control: deletes the original file and extracted page text; evidence claims and hashes remain for audit.",
+	authorization: ["document.write"],
+	concurrency: { mode: "keyed", key: "documentId" },
+	input: s.object({ documentId: id(), reason: s.string() }),
+	output: out("document"),
+	attributes: contract("idempotent: purging a purged document is a no-op"),
+	handler: run(async (svc, actor, input: { documentId: string; reason: string }) => ({ document: await svc.documents.purge(actor, input) })),
+});
+
+// ---------------------------------------------------------------------------
+// evidence-registry
+// ---------------------------------------------------------------------------
+
+export const evidenceList = defineCapability({
+	name: "evidence.list",
+	version: 1,
+	description: "Claims for a startup with provenance, derived verification and contradictions.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id() }),
+	output: out("items", "contradictions"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string }) => {
+		const { items, contradictions } = await svc.evidence.views(actor, input.startupId);
+		return { items, contradictions };
+	}),
+});
+
+export const evidenceGet = defineCapability({
+	name: "evidence.get",
+	version: 1,
+	description: "One claim's provenance: source document, hash, page and coordinates, and cross-source verification.",
+	authorization: ["invest.read"],
+	input: s.object({ evidenceId: id() }),
+	output: out("item", "document"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { evidenceId: string }) => svc.evidence.get(actor, input.evidenceId)),
+});
+
+export const evidenceAttach = defineCapability({
+	name: "evidence.attach",
+	version: 1,
+	description: "Attaches evidence a reviewer verified directly, with how it was verified.",
+	authorization: ["evidence.write"],
+	input: s.object({ startupId: id(), claim: s.string(), reference: s.string(), metric: s.optional(s.object({ key: s.enum(METRIC_KEYS), value: s.number() })) }),
+	output: out("item"),
+	attributes: contract("not idempotent: each call records a reviewer attestation"),
+	handler: run(async (svc, actor, input: { startupId: string; claim: string; reference: string; metric?: { key: (typeof METRIC_KEYS)[number]; value: number } }) => ({
+		item: await svc.evidence.attachReviewerEvidence(actor, input),
+	})),
+});
+
+// ---------------------------------------------------------------------------
+// investment-evaluation
+// ---------------------------------------------------------------------------
+
+export const evaluationStart = defineCapability({
+	name: "evaluation.start",
+	version: 1,
+	description: "Evaluates a startup against an explicitly selected thesis version. Runs asynchronously; poll evaluation.get.",
+	authorization: ["evaluation.run"],
+	idempotency: "supported",
+	input: s.object({ startupId: id(), thesisVersionId: id(), requestKey: s.string() }),
+	output: out("evaluation"),
+	attributes: contract("durable: requestKey derives the evaluation id under a FeltDB requireAbsent fence; a retry returns the same evaluation"),
+	handler: run(async (svc, actor, input: { startupId: string; thesisVersionId: string; requestKey: string }) => ({ evaluation: strip(await svc.evaluations.start(actor, input)) })),
+});
+
+export const evaluationRerun = defineCapability({
+	name: "evaluation.rerun",
+	version: 1,
+	description: "Creates a new evaluation linked to its predecessor. The predecessor is never modified.",
+	authorization: ["evaluation.run"],
+	idempotency: "supported",
+	input: s.object({ evaluationId: id(), requestKey: s.string(), thesisVersionId: s.optional(id()) }),
+	output: out("evaluation"),
+	attributes: contract("durable on requestKey, as evaluation.start"),
+	handler: run(async (svc, actor, input: { evaluationId: string; requestKey: string; thesisVersionId?: string }) => ({ evaluation: strip(await svc.evaluations.rerun(actor, input)) })),
+});
+
+export const evaluationList = defineCapability({
+	name: "evaluation.list",
+	version: 1,
+	description: "Evaluations with status, summary and current decision.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: s.optional(id()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId?: string }) => ({ items: await svc.listEvaluations(actor, input) })),
+});
+
+export const evaluationGet = defineCapability({
+	name: "evaluation.get",
+	version: 1,
+	description: "Evaluation report: manifest, findings with reviewer actions applied, open diligence requests, decision history and decision blockers.",
+	authorization: ["invest.read"],
+	input: s.object({ evaluationId: id() }),
+	output: out("report"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { evaluationId: string }) => ({ report: await svc.decisions.report(actor, input.evaluationId) })),
+});
+
+export const evaluationVerify = defineCapability({
+	name: "evaluation.verify",
+	version: 1,
+	description: "Independently recomputes the manifest digest, projections, question digests and every policy outcome of a stored evaluation.",
+	authorization: ["invest.read"],
+	input: s.object({ evaluationId: id() }),
+	output: out("ok", "checks"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { evaluationId: string }) => svc.evaluations.verify(actor, input.evaluationId)),
+});
+
+// ---------------------------------------------------------------------------
+// investment-review
+// ---------------------------------------------------------------------------
+
+export const reviewRecord = defineCapability({
+	name: "review.record",
+	version: 1,
+	description: "Accept a finding, override its outcome (outcome and reason required), or comment. Findings are never edited.",
+	authorization: ["review.write"],
+	concurrency: { mode: "keyed", key: "evaluationId" },
+	input: s.object({
+		evaluationId: id(),
+		findingId: s.nullable(id()),
+		action: s.enum(["accept", "override", "comment"]),
+		outcome: s.optional(s.enum(OUTCOMES)),
+		reason: s.optional(s.string()),
+	}),
+	output: out("action"),
+	attributes: contract("append-only: each call records a new review action"),
+	handler: run(async (svc, actor, input: { evaluationId: string; findingId: string | null; action: "accept" | "override" | "comment"; outcome?: (typeof OUTCOMES)[number]; reason?: string }) => ({
+		action: await svc.decisions.recordReview(actor, input),
+	})),
+});
+
+export const reviewRequest = defineCapability({
+	name: "review.request",
+	version: 1,
+	description: "Opens a diligence request (follow-up), optionally tied to a finding and assigned to someone.",
+	authorization: ["review.write"],
+	input: s.object({ evaluationId: id(), findingId: s.optional(s.nullable(id())), question: s.string(), assignee: s.optional(s.string()) }),
+	output: out("action"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { evaluationId: string; findingId?: string | null; question: string; assignee?: string }) => ({ action: await svc.decisions.requestEvidence(actor, input) })),
+});
+
+export const reviewResolve = defineCapability({
+	name: "review.resolve",
+	version: 1,
+	description: "Resolves a diligence request. A request can be resolved exactly once.",
+	authorization: ["review.write"],
+	input: s.object({ evaluationId: id(), requestId: id(), resolution: s.string() }),
+	output: out("action"),
+	attributes: contract("requireAbsent on a request-derived id: a second resolution is CONFLICT"),
+	handler: run(async (svc, actor, input: { evaluationId: string; requestId: string; resolution: string }) => ({ action: await svc.decisions.resolveRequest(actor, input) })),
+});
+
+export const decisionRecord = defineCapability({
+	name: "decision.record",
+	version: 1,
+	description: "Records an investment decision. Invest requires every review gate resolved and no failed or unresolved hard gate.",
+	authorization: ["decision.record"],
+	concurrency: { mode: "keyed", key: "evaluationId" },
+	input: s.object({ evaluationId: id(), decision: s.enum(["invest", "decline", "hold", "request_more_diligence"]), rationale: s.string(), expectedSequence: s.integer() }),
+	output: out("decision"),
+	attributes: contract("sequence-fenced: requireAbsent on the decision sequence; a concurrent second decision is CONFLICT"),
+	handler: run(async (svc, actor, input: { evaluationId: string; decision: "invest" | "decline" | "hold" | "request_more_diligence"; rationale: string; expectedSequence: number }) => ({
+		decision: await svc.decisions.recordDecision(actor, input),
+	})),
+});
+
+// ---------------------------------------------------------------------------
+// audit
+// ---------------------------------------------------------------------------
+
+export const auditList = defineCapability({
+	name: "audit.list",
+	version: 1,
+	description: "Append-only audit history for the caller's workspace, newest first.",
+	authorization: ["audit.read"],
+	input: s.object({ entityId: s.optional(s.string()), eventType: s.optional(s.string()), limit: s.optional(s.integer()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { entityId?: string; eventType?: string; limit?: number }) => ({ items: await svc.audit.list(actor, input) })),
+});
+
+function strip<T extends { requestKey?: string; manifest?: unknown }>(e: T) {
+	const { requestKey: _k, ...rest } = e;
+	return rest;
+}
+
+export function investCapabilities(options: { maxUploadBytes: number }) {
+	return [
+		sessionWhoami,
+		workspaceOverview,
+		thesisList,
+		thesisGet,
+		thesisCreate,
+		thesisDraftUpdate,
+		thesisDraftDiscard,
+		thesisValidate,
+		thesisApprove,
+		thesisVersionGet,
+		thesisVersionCompare,
+		startupList,
+		startupGet,
+		startupCreate,
+		startupUpdate,
+		createDocumentUpload(options.maxUploadBytes),
+		documentGet,
+		documentPage,
+		documentLink,
+		documentPurge,
+		evidenceList,
+		evidenceGet,
+		evidenceAttach,
+		evaluationStart,
+		evaluationRerun,
+		evaluationList,
+		evaluationGet,
+		evaluationVerify,
+		reviewRecord,
+		reviewRequest,
+		reviewResolve,
+		decisionRecord,
+		auditList,
+	];
+}

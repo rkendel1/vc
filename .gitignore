@@ -1,0 +1,17 @@
+node_modules
+dist
+*.tsbuildinfo
+coverage
+test-results
+.DS_Store
+.idea
+
+# Local configuration and secrets
+.env
+.env.local
+invest/.env.local
+invest/auth.json
+secrets.json
+
+# Local data (FeltDB store, documents)
+.invest-dev/
