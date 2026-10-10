@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { JevHttpClient } from "../jev/jev-client.ts";
+import { FakeWeb, html, thesisSite } from "../testing/fake-web.ts";
+import { actor } from "../testing/harness.ts";
 import { NORTHWIND_AUDIT, NORTHWIND_DECK } from "../testing/fixtures.ts";
 import { TOKENS, startHttpHarness } from "../testing/http-harness.ts";
 import { startJevStandin } from "../testing/jev-standin.ts";
@@ -23,7 +25,13 @@ function check(condition: unknown, message: string): asserts condition {
 }
 
 const jev = startJevStandin({ port: 0, apiKey: "e2e-key" });
+const web = new FakeWeb({
+	"alpine.vc": thesisSite(),
+	"quiet.vc": { "/robots.txt": { status: 404 }, "/": html("Quiet Capital", `<p>${"Quiet Capital is a firm that values patience. ".repeat(12)}</p>`) },
+	"walled.vc": { "/robots.txt": { type: "text/plain", body: "User-agent: *\nDisallow: /\n" }, "/": html("Walled", "x") },
+});
 const h = await startHttpHarness({
+	fetcherFor: web.fetcherFor,
 	webDist: join(root, "apps/invest-web/dist"),
 	jev: new JevHttpClient({ endpoint: `http://127.0.0.1:${jev.port}/decide`, apiKey: "e2e-key", provider: "standin", model: "lexical", timeoutMs: 5000 }),
 });
@@ -128,10 +136,60 @@ try {
 	check(true, "the stored evaluation verifies independently");
 	await snap("e2e-report");
 
+	console.log("investor research");
+	const research = h.runtime.service.research;
+	for (const url of ["alpine.vc", "quiet.vc", "walled.vc"]) {
+		const { firm } = await research.reconcile(actor("ws-a"), { url });
+		await research.research(actor("ws-a"), firm.id, { verify: false });
+	}
+	await page.click("nav >> text=Investors");
+	await page.waitForSelector("td:has-text('Alpine Ventures')");
+	check((await page.locator("table.list tbody tr").count()) === 3, "all three firms have a profile, including the stubs");
+	await page.selectOption("select", "research_incomplete");
+	await page.waitForSelector("td:has-text('walled.vc')");
+	check(!(await page.isVisible("td:has-text('Alpine Ventures')")), "the list filters by research status");
+	await page.selectOption("select", "");
+	await page.fill("input[type=search]", "fintech");
+	await page.waitForFunction(() => document.querySelectorAll("table.list tbody tr").length === 1);
+	check(await page.isVisible("td:has-text('Alpine Ventures')"), "search matches extracted criteria");
+	await page.click("a:has-text('Alpine Ventures')");
+	await page.waitForSelector("text=Stated by the firm");
+	check(await page.isVisible("text=Inferred from portfolio patterns"), "explicit, observed and inferred criteria are shown apart");
+	check(await page.isVisible("text=Observed from announcements"), "observed criteria have their own group");
+	check(await page.isVisible("text=Nothing here has been adopted as investor-verified"), "research is not presented as investor-verified");
+	await page.click("summary:has-text('check size')");
+	check(await page.isVisible("details[open] blockquote.passage >> text=$500K-$2M"), "a criterion opens its supporting passage");
+	check(await page.isVisible("details[open] dd:has-text('alpine.vc/thesis')"), "and the page it came from");
+	await page.selectOption("summary:has-text('check size') ~ div select", "flag");
+	await page.fill("summary:has-text('check size') ~ div textarea", "Please confirm with the partner.");
+	await page.click("summary:has-text('check size') ~ div >> text=Save review");
+	await page.waitForSelector("li:has-text('Please confirm with the partner.')");
+	check(await page.isVisible("text=Nothing here has been adopted as investor-verified"), "a flag does not make anything investor-verified");
+	await page.click("details[open] >> text=Adopt as investor-verified…");
+	await page.fill("details[open] label:has-text('Why you are adopting') input", "Confirmed by the partner on a call.");
+	await page.click("details[open] >> text=Record as investor-verified");
+	await page.waitForSelector("li:has-text('approved by')");
+	check(await page.isVisible("li:has-text('check size')"), "an explicit human approval is shown as investor-verified");
+	check(await page.isVisible("text=Sources checked"), "sources checked are listed");
+	await snap("e2e-investor");
+	await page.click("nav >> text=Investors");
+	await page.click("a:has-text('walled.vc')");
+	await page.waitForSelector("[data-testid=stub]");
+	check(await page.isVisible("[data-testid=stub] >> text=could not adequately cover"), "an incomplete stub explains why research was incomplete");
+	check(await page.isVisible("text=Blocked by robots rules"), "the blocked source is listed accurately");
+	await page.click("nav >> text=Investors");
+	await page.click("a:has-text('Quiet Capital')");
+	await page.waitForSelector("[data-testid=stub] >> text=does not mean Quiet Capital has no investment thesis");
+	check(true, "a no-thesis stub does not claim the firm has no thesis");
+	await page.click("button:has-text('Refresh research')");
+	await page.waitForFunction(() => Array.from(document.querySelectorAll("h2")).find((h) => h.textContent === "Research runs")?.closest("section")?.querySelectorAll("tbody tr").length === 2, undefined, { timeout: 20000 });
+	check(true, "a refresh can be requested and adds a run to the history");
+
 	console.log("audit");
 	await page.click("nav >> text=Audit trail");
 	await page.waitForSelector("td:has-text('decision.recorded')");
 	check(await page.isVisible("td:has-text('review.override')"), "the override and decision are in the audit trail");
+	check(await page.isVisible("td:has-text('firm.criterion_approved')"), "the research approval is in the audit trail");
 
 	console.log("isolation in the browser");
 	await page.click("text=Sign out");

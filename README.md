@@ -13,7 +13,7 @@ It is not a deal-sourcing tool, an investment adviser, or a company score.
 | --- | --- |
 | `invest/` | Server: AppPort capabilities, domain modules, FeltDB store, Jev adapter, ingestion, tests, quality harness |
 | `apps/invest-web/` | The investor web interface (React, Vite) |
-| `docs/invest/` | Architecture baseline, acceptance checklist, pilot quality report |
+| `docs/invest/` | Architecture baseline, acceptance checklist, pilot quality report, investor research pipeline (VC-2) |
 
 ## Run it
 
@@ -37,11 +37,15 @@ The stand-in is a keyword heuristic, not Jev. Every manifest records `provider: 
 made with it can never be mistaken for a real judgment. Point `JEV_ENDPOINT` at a real Jev deployment
 for anything that matters.
 
+## Investor research (VC-2)
+
+`bun run research -- invest/examples/vc-firms.example.csv --workspace ws-dev [--dry-run]` reconciles one profile per venture firm and researches each firm's own public pages within bounds. Findings are labelled explicit, observed or inferred, are traced to a source passage, and are never investor-approved theses; a firm with nothing found gets an explicit stub. See [`docs/invest/VC2_RESEARCH_PIPELINE.md`](docs/invest/VC2_RESEARCH_PIPELINE.md). Browse results under **Investors** in the web app.
+
 ## Check it
 
 | Command | What it proves |
 | --- | --- |
-| `bun run test` | 47 tests: thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
+| `bun run test` | 102 tests (47 original, 55 for the research pipeline):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
 | `bun run typecheck` | Server and web app typecheck |
 | `bun run check:architecture` | The invariants in `docs/invest/PR1_ARCHITECTURE_BASELINE.md` §5 |
 | `bun run generate:check`, `doctor` | Generated manifest/client are current; AppPort doctor is clean |
@@ -57,7 +61,7 @@ apps/invest-web (React)  ──generated AppPort client──▶  /appport (Http
                                                            │  authenticate: AuthBoundry adapter (bearer → principal, workspace, role)
                                                            │  permissionAuthorizer: capability permissions
                                                            ▼
-                                              invest/appport/capabilities.ts  (33 capabilities)
+                                              invest/appport/capabilities.ts  (40 capabilities)
                                                            ▼
                                               invest/service.ts → modules → invest/store (FeltDB 0.11.7)
                                                                         └→ invest/jev (Jev HTTP contract)

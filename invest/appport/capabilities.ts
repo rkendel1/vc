@@ -1,5 +1,6 @@
 import { type CapabilityContext, defineCapability, errors, s } from "@appport/sdk";
 import { InvestError } from "../domain/errors.ts";
+import { CRITERION_FIELDS, RESEARCH_STATUSES, type CriterionField, type ResearchStatus, type ReviewAction } from "../domain/research.ts";
 import { METRIC_KEYS, OUTCOMES, SOURCE_TYPES, type Actor, type InvestmentCriterion, type ThesisSettings } from "../domain/types.ts";
 import { validateThesisContent } from "../modules/investment-thesis.ts";
 import type { InvestmentService } from "../service.ts";
@@ -552,6 +553,98 @@ export const auditList = defineCapability({
 	handler: run(async (svc, actor, input: { entityId?: string; eventType?: string; limit?: number }) => ({ items: await svc.audit.list(actor, input) })),
 });
 
+
+// ---------------------------------------------------------------------------
+// investor research (public-source findings; never investor-approved theses)
+// ---------------------------------------------------------------------------
+
+export const firmList = defineCapability({
+	name: "firm.list",
+	version: 1,
+	description: "Investor firm profiles in the caller's workspace, with research status, last research time and criteria counts. Optional search and status filter.",
+	authorization: ["invest.read"],
+	input: s.object({ query: s.optional(s.string()), status: s.optional(s.enum(RESEARCH_STATUSES)) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { query?: string; status?: ResearchStatus }) => ({ items: await svc.research.list(actor, input) })),
+});
+
+export const firmGet = defineCapability({
+	name: "firm.get",
+	version: 1,
+	description: "One firm profile: criteria with assertion type, source passage, verification and freshness; conflicts; approved criteria; sources checked; run history; reviews.",
+	authorization: ["invest.read"],
+	input: s.object({ firmId: id() }),
+	output: out("profile"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { firmId: string }) => ({ profile: await svc.research.profile(actor, input.firmId) })),
+});
+
+export const firmRefresh = defineCapability({
+	name: "firm.refresh",
+	version: 1,
+	description: "Re-researches one existing firm in this server process within the configured crawl bounds. Accepts only a firm id, never a URL. Returns at once; poll firm.get.",
+	authorization: ["research.run"],
+	concurrency: { mode: "keyed", key: "firmId" },
+	input: s.object({ firmId: id() }),
+	output: out("firm", "run"),
+	attributes: contract("append-only: each call records a new research run; a run already in progress for the firm is CONFLICT"),
+	handler: run(async (svc, actor, input: { firmId: string }) => svc.research.startRefresh(actor, input.firmId)),
+});
+
+export const firmVerify = defineCapability({
+	name: "firm.verify",
+	version: 1,
+	description: "Asks Jev whether each current criterion's captured passage supports its statement. Reports skipped when Jev is not configured; never simulates a result.",
+	authorization: ["research.run"],
+	input: s.object({ firmId: id() }),
+	output: out("summary"),
+	attributes: contract("append-only: each attempt is a new verification record; conclusive results for an unchanged passage are not re-asked"),
+	handler: run(async (svc, actor, input: { firmId: string }) => ({ summary: await svc.research.verifyFirm(actor, input.firmId) })),
+});
+
+export const firmReview = defineCapability({
+	name: "firm.review",
+	version: 1,
+	description: "Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it.",
+	authorization: ["review.write"],
+	input: s.object({ firmId: id(), criterionId: s.optional(s.nullable(id())), action: s.enum(["flag", "dispute", "correct", "note"]), note: s.string(), correctedValue: s.optional(s.string()) }),
+	output: out("review"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string | null; action: ReviewAction; note: string; correctedValue?: string }) => ({ review: await svc.research.review(actor, input) })),
+});
+
+export const firmApprove = defineCapability({
+	name: "firm.approve",
+	version: 1,
+	description: "Records an investor-verified criterion for a firm, from a research criterion or entered by hand. The only way research becomes investor-verified; requires thesis.approve.",
+	authorization: ["thesis.approve"],
+	input: s.object({
+		firmId: id(),
+		criterionId: s.optional(id()),
+		field: s.optional(s.enum(CRITERION_FIELDS)),
+		polarity: s.optional(s.enum(["include", "exclude"])),
+		value: s.optional(s.string()),
+		minUsd: s.optional(s.number()),
+		maxUsd: s.optional(s.number()),
+		note: s.string(),
+	}),
+	output: out("approval"),
+	attributes: contract("append-only: an existing active approval of the same value is CONFLICT"),
+	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; note: string }) => ({ approval: await svc.research.approve(actor, input) })),
+});
+
+export const firmApprovalWithdraw = defineCapability({
+	name: "firm.approval.withdraw",
+	version: 1,
+	description: "Withdraws an investor-verified criterion by appending a withdrawal; the approval stays in the history.",
+	authorization: ["thesis.approve"],
+	input: s.object({ firmId: id(), approvalId: id(), note: s.string() }),
+	output: out("approval"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { firmId: string; approvalId: string; note: string }) => ({ approval: await svc.research.withdraw(actor, input) })),
+});
+
 function strip<T extends { requestKey?: string; manifest?: unknown }>(e: T) {
 	const { requestKey: _k, ...rest } = e;
 	return rest;
@@ -592,5 +685,12 @@ export function investCapabilities(options: { maxUploadBytes: number }) {
 		reviewResolve,
 		decisionRecord,
 		auditList,
+		firmList,
+		firmGet,
+		firmRefresh,
+		firmVerify,
+		firmReview,
+		firmApprove,
+		firmApprovalWithdraw,
 	];
 }

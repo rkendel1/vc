@@ -1,0 +1,6 @@
+url,name,notes
+https://a16z.com,Andreessen Horowitz,illustrative example from a public list
+https://www.sequoiacap.com/,Sequoia Capital,illustrative example from a public list
+firstround.com,,name will be taken from the page title
+https://www.firstround.com/about,First Round Capital,duplicate of the row above: reconciled into one profile
+https://example-vc.invalid/,Not A Real Firm,rejected or incomplete: shows how failures are reported

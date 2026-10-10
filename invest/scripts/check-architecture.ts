@@ -43,8 +43,14 @@ for (const file of productionServer) {
 	const rel = relative(join(root, "invest"), file);
 	// 1. Durable state only through invest/store.
 	if (imports(src).some((s) => s === "@feltdb/core" || s.startsWith("@feltdb/")) && !rel.startsWith("store/")) fail("feltdb-only-in-store", file, "imports @feltdb/core");
-	// 2. Only the Jev adapter makes outbound network calls.
-	if (/\bfetch\s*\(/.test(src) && !rel.startsWith("jev/")) fail("network-only-in-jev-adapter", file, "calls fetch()");
+	// 2. Only the Jev adapter and the research fetcher make outbound network calls; the fetcher alone reaches public web pages.
+	if (/\bfetch\s*\(/.test(src) && !rel.startsWith("jev/") && rel !== "research/fetcher.ts") fail("network-only-in-jev-adapter-and-research-fetcher", file, "calls fetch()");
+	if (/\b(?:doFetch|fetchImpl)\b/.test(src) && !rel.startsWith("jev/") && rel !== "research/fetcher.ts") fail("network-only-in-jev-adapter-and-research-fetcher", file, "uses an injected fetch outside the sanctioned adapters");
+	// Research code (crawl, extraction, verification wording) is network- and storage-free except the fetcher; persistence is the module's job.
+	if (rel.startsWith("research/") && imports(src).some((s) => /(^|\/)store\/store\.ts$|appport\//.test(s))) fail("research-has-no-storage", file, "research/ must not import the store or AppPort");
+	if (rel.startsWith("research/") && /process\.env/.test(src)) fail("research-has-no-env", file, "research/ must not read the environment; configuration is injected");
+	// Crawled content is data: nothing under research/ may spawn processes or import dynamic code.
+	if (rel.startsWith("research/") && (imports(src).some((s) => /^(node:)?(child_process|vm|worker_threads)$/.test(s)) || /Bun\.(spawn|\$)\b/.test(src))) fail("research-no-execution", file, "process or code execution");
 	// Secrets are read only by configuration.
 	if (/process\.env\.(JEV_API_KEY|DOCUMENT_STORAGE_LINK_SECRET)/.test(src) && rel !== "config.ts") fail("secrets-only-in-config", file, "reads a secret from the environment");
 	// Untrusted document text must never be evaluated.
@@ -63,9 +69,9 @@ for (const file of web) {
 	const src = await readFile(file, "utf8");
 	for (const spec of imports(src)) {
 		if (!spec.includes("invest/")) continue;
-		const allowed = spec.endsWith("invest/appport/generated/client.ts") || spec.endsWith("invest/domain/types.ts") || spec.endsWith("invest/domain/views.ts");
+		const allowed = spec.endsWith("invest/appport/generated/client.ts") || spec.endsWith("invest/domain/types.ts") || spec.endsWith("invest/domain/views.ts") || spec.endsWith("invest/domain/research.ts");
 		if (!allowed) fail("web-imports-only-contract", file, spec);
-		if (spec.endsWith("domain/types.ts") || spec.endsWith("domain/views.ts")) {
+		if (spec.endsWith("domain/types.ts") || spec.endsWith("domain/views.ts") || spec.endsWith("domain/research.ts")) {
 			const line = src.split("\n").find((l) => l.includes(spec)) ?? "";
 			if (!/import\s+(type\s|\{\s*(METRIC_KEYS|SOURCE_TYPES|type\s))/.test(line) && !/^import \{[^}]*\} from/.test(line)) fail("web-imports-only-contract", file, `value import from ${spec}`);
 		}
