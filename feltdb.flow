@@ -1,0 +1,149 @@
+flow_version 1
+
+// Authoritative declaration of Attn Invest's durable state (FeltDB 0.11.7).
+// invest/store/store.ts loads this file; it does not keep its own list of collections or indexes.
+// Records are validated in TypeScript at the application boundary; this file declares the collections,
+// the fields the store filters on, and their indexes. Every record carries workspaceId.
+
+app AttnInvest {
+  collection investment_theses {
+    workspaceId: text
+    index workspaceId using hash(workspaceId)
+  }
+  collection thesis_versions {
+    workspaceId: text
+    thesisId: text
+    index workspaceId using hash(workspaceId)
+    index thesisId using hash(thesisId)
+  }
+  collection startups {
+    workspaceId: text
+    index workspaceId using hash(workspaceId)
+  }
+  collection documents {
+    workspaceId: text
+    startupId: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+  }
+  collection document_pages {
+    workspaceId: text
+    documentId: text
+    index workspaceId using hash(workspaceId)
+    index documentId using hash(documentId)
+  }
+  collection evidence_items {
+    workspaceId: text
+    startupId: text
+    documentId: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+    index documentId using hash(documentId)
+  }
+  collection evaluations {
+    workspaceId: text
+    startupId: text
+    status: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+    index status using hash(status)
+  }
+  collection criterion_findings {
+    workspaceId: text
+    evaluationId: text
+    index workspaceId using hash(workspaceId)
+    index evaluationId using hash(evaluationId)
+  }
+  collection review_actions {
+    workspaceId: text
+    evaluationId: text
+    index workspaceId using hash(workspaceId)
+    index evaluationId using hash(evaluationId)
+  }
+  collection investment_decisions {
+    workspaceId: text
+    evaluationId: text
+    startupId: text
+    index workspaceId using hash(workspaceId)
+    index evaluationId using hash(evaluationId)
+    index startupId using hash(startupId)
+  }
+  collection audit_events {
+    workspaceId: text
+    eventType: text
+    index workspaceId using hash(workspaceId)
+    index eventType using hash(eventType)
+  }
+  collection investor_firms {
+    workspaceId: text
+    index workspaceId using hash(workspaceId)
+  }
+  collection research_runs {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection research_sources {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection research_criteria {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection criterion_verifications {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection research_reviews {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection firm_approvals {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection monitoring_targets {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection source_states {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection investment_events {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection event_evidence {
+    workspaceId: text
+    firmId: text
+    eventId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+    index eventId using hash(eventId)
+  }
+  collection research_findings {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+}

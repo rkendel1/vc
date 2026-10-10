@@ -11,6 +11,10 @@ export type ParsedPage = {
 	blocks: string[];
 	links: { url: string; text: string }[];
 	metaRobots: string[];
+	/** Date declared in page metadata (time[datetime], article:published_time, JSON-LD datePublished), if any. */
+	publishedAt: string | null;
+	/** RSS/Atom feeds advertised by <link rel="alternate">. */
+	feedLinks: string[];
 };
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", hellip: "…", euro: "€", pound: "£" };
@@ -47,6 +51,18 @@ export function parseHtml(html: string, baseUrl: string): ParsedPage {
 		const url = canonicalPageUrl(decodeEntities(raw.trim()), baseUrl);
 		if (url) links.push({ url, text: decodeEntities(m[2]!.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 120) });
 	}
+	const feedLinks: string[] = [];
+	for (const m of source.matchAll(/<link\b[^>]*>/gi)) {
+		const tagText = m[0];
+		if (!/rel\s*=\s*["']?alternate["']?/i.test(tagText) || !/type\s*=\s*["']?application\/(?:rss|atom)\+xml/i.test(tagText)) continue;
+		const href = /href\s*=\s*["']([^"']+)["']/i.exec(tagText)?.[1];
+		const url = href ? canonicalPageUrl(decodeEntities(href), baseUrl) : null;
+		if (url) feedLinks.push(url);
+	}
+	const dateRaw =
+		/<meta\b[^>]*(?:property|name)\s*=\s*["'](?:article:published_time|og:published_time|datePublished|date|pubdate)["'][^>]*content\s*=\s*["']([^"']+)["']/i.exec(source)?.[1] ??
+		/<time\b[^>]*datetime\s*=\s*["']([^"']+)["']/i.exec(source)?.[1] ??
+		/"datePublished"\s*:\s*"([^"]+)"/i.exec(source)?.[1];
 	const stripped = source
 		.replace(/<!--[\s\S]*?-->/g, " ")
 		.replace(/<(script|style|noscript|template|svg|iframe|object|embed|head)\b[\s\S]*?<\/\1\s*>/gi, " ")
@@ -57,11 +73,19 @@ export function parseHtml(html: string, baseUrl: string): ParsedPage {
 		.split(/\n+/)
 		.map((b) => b.replace(/\s+/g, " ").trim())
 		.filter((b) => b.length > 0);
-	return { title: title ? decodeEntities(title.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 200) || null : null, blocks, links, metaRobots };
+	return { title: title ? decodeEntities(title.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 200) || null : null, blocks, links, metaRobots, publishedAt: toIso(dateRaw), feedLinks: [...new Set(feedLinks)].slice(0, 5) };
+}
+
+function toIso(raw: string | undefined): string | null {
+	if (!raw) return null;
+	const t = Date.parse(raw.trim());
+	if (!Number.isFinite(t)) return null;
+	const y = new Date(t).getUTCFullYear();
+	return y >= 1990 && y <= 2100 ? new Date(t).toISOString() : null;
 }
 
 export function plainTextToPage(text: string): ParsedPage {
-	return { title: null, blocks: text.split(/\n+/).map((b) => b.replace(/\s+/g, " ").trim()).filter(Boolean), links: [], metaRobots: [] };
+	return { title: null, blocks: text.split(/\n+/).map((b) => b.replace(/\s+/g, " ").trim()).filter(Boolean), links: [], metaRobots: [], publishedAt: null, feedLinks: [] };
 }
 
 /** Sentences of one block, kept short enough to quote. */
