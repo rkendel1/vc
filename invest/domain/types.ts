@@ -21,7 +21,8 @@ export type Permission =
 	| "evaluation.run"
 	| "review.write"
 	| "decision.record"
-	| "audit.read";
+	| "audit.read"
+	| "research.run";
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
 	"invest.read",
@@ -34,6 +35,7 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
 	"review.write",
 	"decision.record",
 	"audit.read",
+	"research.run",
 ];
 
 export type Actor = {

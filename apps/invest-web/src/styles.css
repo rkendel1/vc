@@ -700,3 +700,100 @@ table.list tr.clickable:hover td {
 		animation: none !important;
 	}
 }
+
+/* ---------- investor research ---------- */
+.rstatus {
+	display: inline-block;
+	font-size: 13px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--rule);
+	background: var(--sheet);
+}
+.rstatus.thesis_found {
+	border-color: var(--o-supported);
+}
+.rstatus.no_thesis_found {
+	border-color: var(--o-insufficient);
+	border-style: dashed;
+}
+.rstatus.research_incomplete {
+	border-color: var(--o-partial);
+	border-style: dotted;
+}
+.flag {
+	display: inline-block;
+	font-size: 12px;
+	padding: 0 6px;
+	border-radius: 4px;
+	border: 1px solid var(--rule);
+	margin-right: 4px;
+}
+.flag.stale {
+	border-color: var(--o-partial);
+}
+.flag.conflict {
+	border-color: var(--o-contradicted);
+}
+.tag {
+	font-size: 12px;
+	padding: 0 6px;
+	border-radius: 4px;
+	border: 1px solid var(--rule);
+	white-space: nowrap;
+}
+.tag.assert-explicit {
+	border-color: var(--o-supported);
+}
+.tag.assert-observed {
+	border-style: dashed;
+}
+.tag.assert-inferred {
+	border-style: dotted;
+	color: var(--muted);
+}
+.tag.verif-source_supports {
+	border-color: var(--o-supported);
+}
+.tag.verif-source_does_not_support,
+.tag.verif-verification_error {
+	border-color: var(--o-contradicted);
+}
+.note.stub {
+	border-color: var(--o-insufficient);
+	margin: var(--s3) 0;
+}
+.note.stub p {
+	margin: 4px 0;
+}
+.rc > summary {
+	flex-wrap: wrap;
+}
+.rc-label {
+	font-weight: 600;
+}
+blockquote.passage {
+	margin: 0;
+	padding: var(--s2) var(--s3);
+	border-left: 3px solid var(--rule);
+	background: var(--ground);
+	font-family: var(--serif);
+	overflow-wrap: anywhere;
+}
+dl.facts {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 4px var(--s3);
+	margin: 0;
+	font-size: 14px;
+}
+dl.facts dt {
+	color: var(--muted);
+}
+dl.facts dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.small {
+	font-size: 12px;
+}

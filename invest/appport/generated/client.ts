@@ -224,6 +224,98 @@ export type EvidenceListV1Output = {
 export type EvidenceListInput = EvidenceListV1Input;
 export type EvidenceListOutput = EvidenceListV1Output;
 
+/** Withdraws an investor-verified criterion by appending a withdrawal; the approval stays in the history. */
+export type FirmApprovalWithdrawV1Input = {
+  firmId: string;
+  approvalId: string;
+  note: string;
+};
+export type FirmApprovalWithdrawV1Output = {
+  approval: unknown;
+};
+
+export type FirmApprovalWithdrawInput = FirmApprovalWithdrawV1Input;
+export type FirmApprovalWithdrawOutput = FirmApprovalWithdrawV1Output;
+
+/** Records an investor-verified criterion for a firm, from a research criterion or entered by hand. The only way research becomes investor-verified; requires thesis.approve. */
+export type FirmApproveV1Input = {
+  firmId: string;
+  criterionId?: string;
+  field?: "stage" | "sector" | "geography" | "check_size" | "business_model" | "company_characteristics" | "exclusion" | "traction" | "application_requirements";
+  polarity?: "include" | "exclude";
+  value?: string;
+  minUsd?: number;
+  maxUsd?: number;
+  note: string;
+};
+export type FirmApproveV1Output = {
+  approval: unknown;
+};
+
+export type FirmApproveInput = FirmApproveV1Input;
+export type FirmApproveOutput = FirmApproveV1Output;
+
+/** One firm profile: criteria with assertion type, source passage, verification and freshness; conflicts; approved criteria; sources checked; run history; reviews. */
+export type FirmGetV1Input = {
+  firmId: string;
+};
+export type FirmGetV1Output = {
+  profile: unknown;
+};
+
+export type FirmGetInput = FirmGetV1Input;
+export type FirmGetOutput = FirmGetV1Output;
+
+/** Investor firm profiles in the caller's workspace, with research status, last research time and criteria counts. Optional search and status filter. */
+export type FirmListV1Input = {
+  query?: string;
+  status?: "pending" | "thesis_found" | "no_thesis_found" | "research_incomplete";
+};
+export type FirmListV1Output = {
+  items: unknown;
+};
+
+export type FirmListInput = FirmListV1Input;
+export type FirmListOutput = FirmListV1Output;
+
+/** Re-researches one existing firm in this server process within the configured crawl bounds. Accepts only a firm id, never a URL. Returns at once; poll firm.get. */
+export type FirmRefreshV1Input = {
+  firmId: string;
+};
+export type FirmRefreshV1Output = {
+  firm: unknown;
+  run: unknown;
+};
+
+export type FirmRefreshInput = FirmRefreshV1Input;
+export type FirmRefreshOutput = FirmRefreshV1Output;
+
+/** Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it. */
+export type FirmReviewV1Input = {
+  firmId: string;
+  criterionId?: string | null;
+  action: "flag" | "dispute" | "correct" | "note";
+  note: string;
+  correctedValue?: string;
+};
+export type FirmReviewV1Output = {
+  review: unknown;
+};
+
+export type FirmReviewInput = FirmReviewV1Input;
+export type FirmReviewOutput = FirmReviewV1Output;
+
+/** Asks Jev whether each current criterion's captured passage supports its statement. Reports skipped when Jev is not configured; never simulates a result. */
+export type FirmVerifyV1Input = {
+  firmId: string;
+};
+export type FirmVerifyV1Output = {
+  summary: unknown;
+};
+
+export type FirmVerifyInput = FirmVerifyV1Input;
+export type FirmVerifyOutput = FirmVerifyV1Output;
+
 /** Accept a finding, override its outcome (outcome and reason required), or comment. Findings are never edited. */
 export type ReviewRecordV1Input = {
   evaluationId: string;
@@ -510,6 +602,13 @@ export interface InvestContract extends AppContract {
     "evidence.attach": { input: EvidenceAttachInput; output: EvidenceAttachOutput; kind: "request"; version: 1 };
     "evidence.get": { input: EvidenceGetInput; output: EvidenceGetOutput; kind: "request"; version: 1 };
     "evidence.list": { input: EvidenceListInput; output: EvidenceListOutput; kind: "request"; version: 1 };
+    "firm.approval.withdraw": { input: FirmApprovalWithdrawInput; output: FirmApprovalWithdrawOutput; kind: "request"; version: 1 };
+    "firm.approve": { input: FirmApproveInput; output: FirmApproveOutput; kind: "request"; version: 1 };
+    "firm.get": { input: FirmGetInput; output: FirmGetOutput; kind: "request"; version: 1 };
+    "firm.list": { input: FirmListInput; output: FirmListOutput; kind: "request"; version: 1 };
+    "firm.refresh": { input: FirmRefreshInput; output: FirmRefreshOutput; kind: "request"; version: 1 };
+    "firm.review": { input: FirmReviewInput; output: FirmReviewOutput; kind: "request"; version: 1 };
+    "firm.verify": { input: FirmVerifyInput; output: FirmVerifyOutput; kind: "request"; version: 1 };
     "review.record": { input: ReviewRecordInput; output: ReviewRecordOutput; kind: "request"; version: 1 };
     "review.request": { input: ReviewRequestInput; output: ReviewRequestOutput; kind: "request"; version: 1 };
     "review.resolve": { input: ReviewResolveInput; output: ReviewResolveOutput; kind: "request"; version: 1 };
@@ -552,6 +651,13 @@ export const capabilityVersions: Record<string, number> = {
   "evidence.attach": 1,
   "evidence.get": 1,
   "evidence.list": 1,
+  "firm.approval.withdraw": 1,
+  "firm.approve": 1,
+  "firm.get": 1,
+  "firm.list": 1,
+  "firm.refresh": 1,
+  "firm.review": 1,
+  "firm.verify": 1,
   "review.record": 1,
   "review.request": 1,
   "review.resolve": 1,
@@ -2148,6 +2254,686 @@ export const manifest = {
           },
           "authorization": [
             "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.approval.withdraw",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Withdraws an investor-verified criterion by appending a withdrawal; the approval stays in the history.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "approvalId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "approvalId",
+          "note"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approval": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "approval"
+        ]
+      },
+      "authorization": [
+        "thesis.approve"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Withdraws an investor-verified criterion by appending a withdrawal; the approval stays in the history.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "approvalId": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "approvalId",
+              "note"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "approval": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "approval"
+            ]
+          },
+          "authorization": [
+            "thesis.approve"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.approve",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Records an investor-verified criterion for a firm, from a research criterion or entered by hand. The only way research becomes investor-verified; requires thesis.approve.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "criterionId": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "stage",
+              "sector",
+              "geography",
+              "check_size",
+              "business_model",
+              "company_characteristics",
+              "exclusion",
+              "traction",
+              "application_requirements"
+            ]
+          },
+          "polarity": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "minUsd": {
+            "type": "number"
+          },
+          "maxUsd": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "note"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approval": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "approval"
+        ]
+      },
+      "authorization": [
+        "thesis.approve"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Records an investor-verified criterion for a firm, from a research criterion or entered by hand. The only way research becomes investor-verified; requires thesis.approve.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "criterionId": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string",
+                "enum": [
+                  "stage",
+                  "sector",
+                  "geography",
+                  "check_size",
+                  "business_model",
+                  "company_characteristics",
+                  "exclusion",
+                  "traction",
+                  "application_requirements"
+                ]
+              },
+              "polarity": {
+                "type": "string",
+                "enum": [
+                  "include",
+                  "exclude"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "minUsd": {
+                "type": "number"
+              },
+              "maxUsd": {
+                "type": "number"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "note"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "approval": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "approval"
+            ]
+          },
+          "authorization": [
+            "thesis.approve"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "One firm profile: criteria with assertion type, source passage, verification and freshness; conflicts; approved criteria; sources checked; run history; reviews.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "profile"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "One firm profile: criteria with assertion type, source passage, verification and freshness; conflicts; approved criteria; sources checked; run history; reviews.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "profile": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "profile"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Investor firm profiles in the caller's workspace, with research status, last research time and criteria counts. Optional search and status filter.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "thesis_found",
+              "no_thesis_found",
+              "research_incomplete"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Investor firm profiles in the caller's workspace, with research status, last research time and criteria counts. Optional search and status filter.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "thesis_found",
+                  "no_thesis_found",
+                  "research_incomplete"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.refresh",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Re-researches one existing firm in this server process within the configured crawl bounds. Accepts only a firm id, never a URL. Returns at once; poll firm.get.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "firm": {},
+          "run": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "firm",
+          "run"
+        ]
+      },
+      "authorization": [
+        "research.run"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "firmId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Re-researches one existing firm in this server process within the configured crawl bounds. Accepts only a firm id, never a URL. Returns at once; poll firm.get.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "firm": {},
+              "run": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "firm",
+              "run"
+            ]
+          },
+          "authorization": [
+            "research.run"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "firmId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.review",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "criterionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "flag",
+              "dispute",
+              "correct",
+              "note"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "correctedValue": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "action",
+          "note"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "review": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "review"
+        ]
+      },
+      "authorization": [
+        "review.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "criterionId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "flag",
+                  "dispute",
+                  "correct",
+                  "note"
+                ]
+              },
+              "note": {
+                "type": "string"
+              },
+              "correctedValue": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "action",
+              "note"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "review": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "review"
+            ]
+          },
+          "authorization": [
+            "review.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.verify",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Asks Jev whether each current criterion's captured passage supports its statement. Reports skipped when Jev is not configured; never simulates a result.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "summary": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "summary"
+        ]
+      },
+      "authorization": [
+        "research.run"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Asks Jev whether each current criterion's captured passage supports its statement. Reports skipped when Jev is not configured; never simulates a result.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "summary": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "summary"
+            ]
+          },
+          "authorization": [
+            "research.run"
           ],
           "idempotency": "unsupported",
           "concurrency": {

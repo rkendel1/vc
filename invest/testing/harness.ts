@@ -4,9 +4,12 @@ import { join } from "node:path";
 import { ALL_PERMISSIONS, type Actor } from "../domain/types.ts";
 import { DocumentStorage } from "../ingestion/document-storage.ts";
 import { JEV_ADAPTER_VERSION, JEV_CONTRACT, JevError, type JevDecider, type JevDecisionRequest, type JevDecisionResponse, type JevIdentity, validateChoiceResponse } from "../jev/jev-client.ts";
+import type { ResearchDeps } from "../modules/investor-research.ts";
 import { silentLogger } from "../logger.ts";
 import { InvestmentService } from "../service.ts";
 import { InvestStore } from "../store/store.ts";
+
+export const TEST_RESEARCH_LIMITS = { maxPages: 12, maxDepth: 2, timeoutMs: 2_000, retries: 2, perDomainDelayMs: 10, maxBytes: 1_000_000, maxRedirects: 3 };
 
 export const ANALYST_PERMISSIONS = ALL_PERMISSIONS.filter((p) => p !== "thesis.approve" && p !== "decision.record");
 
@@ -64,9 +67,9 @@ export type Harness = {
 	close(): Promise<void>;
 };
 
-export async function createHarness(options: { jev?: JevDecider; maxRetries?: number; timeoutMs?: number; jevTimeoutMs?: number } = {}): Promise<Harness> {
+export async function createHarness(options: { jev?: JevDecider; maxRetries?: number; timeoutMs?: number; jevTimeoutMs?: number; fetcherFor?: ResearchDeps["fetcherFor"]; staleAfterDays?: number; clock?: () => Date } = {}): Promise<Harness> {
 	const dir = await mkdtemp(join(tmpdir(), "invest-test-"));
-	const store = await InvestStore.openDir(join(dir, "felt"));
+	const store = await InvestStore.openDir(join(dir, "felt"), options.clock);
 	const storage = new DocumentStorage(join(dir, "docs"), "test-link-secret-0123456789");
 	const service = new InvestmentService({
 		store,
@@ -75,6 +78,12 @@ export async function createHarness(options: { jev?: JevDecider; maxRetries?: nu
 		limits: { maxBytes: 5 * 1024 * 1024, allowedTypes: ["application/pdf"], maxPages: 50, parseTimeoutMs: 10_000 },
 		evaluation: { timeoutMs: options.timeoutMs ?? 20_000, maxRetries: options.maxRetries ?? 2, jevTimeoutMs: options.jevTimeoutMs ?? 5_000, backoffMs: 5 },
 		logger: silentLogger,
+		research: {
+			fetcherFor: options.fetcherFor ?? (() => ({ fetchPage: async () => { throw new Error("no research fetcher configured in this test"); } })),
+			defaults: TEST_RESEARCH_LIMITS,
+			staleAfterDays: options.staleAfterDays ?? 180,
+			jevTimeoutMs: 5_000,
+		},
 	});
 	return {
 		service,

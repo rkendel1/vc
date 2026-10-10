@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { call, getToken, setToken } from "./api.ts";
+import { InvestorScreen, InvestorsScreen } from "./screens/Investors.tsx";
 import { AuditScreen } from "./screens/Audit.tsx";
 import { ReportScreen } from "./screens/Report.tsx";
 import { StartupScreen, StartupsScreen } from "./screens/Startups.tsx";
@@ -82,6 +83,7 @@ const NAV = [
 	{ path: "", label: "Workspace" },
 	{ path: "theses", label: "Theses" },
 	{ path: "startups", label: "Startups" },
+	{ path: "investors", label: "Investors" },
 	{ path: "audit", label: "Audit trail" },
 ];
 
@@ -94,6 +96,8 @@ function Shell({ session, onSignOut }: { session: Session; onSignOut: () => void
 	else if (route[0] === "startups" && route[1]) screen = <StartupScreen startupId={route[1]} />;
 	else if (route[0] === "startups") screen = <StartupsScreen />;
 	else if (route[0] === "evaluations" && route[1]) screen = <ReportScreen evaluationId={route[1]} />;
+	else if (route[0] === "investors" && route[1]) screen = <InvestorScreen firmId={route[1]} />;
+	else if (route[0] === "investors") screen = <InvestorsScreen />;
 	else if (route[0] === "audit") screen = <AuditScreen />;
 	else screen = <WorkspaceScreen />;
 	return (

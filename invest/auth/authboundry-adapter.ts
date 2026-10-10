@@ -43,7 +43,7 @@ export type AuthBoundryAuthority = { authorize(request: AuthBoundryAuthorization
 
 export const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 	viewer: ["invest.read", "audit.read"],
-	analyst: ["invest.read", "thesis.write", "startup.write", "document.write", "evidence.write", "evaluation.run", "review.write", "audit.read"],
+	analyst: ["invest.read", "thesis.write", "startup.write", "document.write", "evidence.write", "evaluation.run", "review.write", "audit.read", "research.run"],
 	partner: ALL_PERMISSIONS,
 };
 

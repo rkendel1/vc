@@ -20,6 +20,7 @@ export type InvestConfig = {
 	jev: { endpoint: string | null; apiKey: string | null; provider: string | null; model: string | null; timeoutMs: number };
 	documents: { storageDir: string; linkSecret: string; maxBytes: number; allowedTypes: string[]; maxPages: number; parseTimeoutMs: number };
 	evaluation: { timeoutMs: number; maxRetries: number };
+	research: { maxPages: number; maxDepth: number; timeoutMs: number; retries: number; perDomainDelayMs: number; maxBytes: number; maxRedirects: number; userAgent: string; staleAfterDays: number };
 };
 
 export class ConfigError extends Error {}
@@ -110,6 +111,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 			timeoutMs: int(env, "EVALUATION_TIMEOUT_MS", 120_000, 5_000, 3_600_000),
 			maxRetries: int(env, "EVALUATION_MAX_RETRIES", 2, 0, 5),
 		},
+		research: {
+			maxPages: int(env, "RESEARCH_MAX_PAGES", 12, 1, 50),
+			maxDepth: int(env, "RESEARCH_MAX_DEPTH", 2, 0, 4),
+			timeoutMs: int(env, "RESEARCH_TIMEOUT_MS", 10_000, 1_000, 60_000),
+			retries: int(env, "RESEARCH_RETRIES", 2, 0, 4),
+			perDomainDelayMs: int(env, "RESEARCH_DOMAIN_DELAY_MS", 1_500, 250, 60_000),
+			maxBytes: int(env, "RESEARCH_MAX_BYTES", 1_500_000, 10_000, 10_000_000),
+			maxRedirects: int(env, "RESEARCH_MAX_REDIRECTS", 3, 0, 5),
+			userAgent: `AttnInvestResearchBot/1.0${str(env, "RESEARCH_CONTACT") ? ` (+${str(env, "RESEARCH_CONTACT")})` : ""}`,
+			staleAfterDays: int(env, "RESEARCH_STALE_AFTER_DAYS", 180, 1, 3650),
+		},
 	};
 	return { config, warnings };
 }
@@ -126,5 +138,6 @@ export function describeConfig(config: InvestConfig): Record<string, unknown> {
 			: "not configured",
 		documents: { maxBytes: config.documents.maxBytes, allowedTypes: config.documents.allowedTypes, maxPages: config.documents.maxPages },
 		evaluation: config.evaluation,
+		research: { ...config.research },
 	};
 }

@@ -26,6 +26,13 @@ export const C = {
 	reviewActions: "review_actions",
 	decisions: "investment_decisions",
 	audit: "audit_events",
+	firms: "investor_firms",
+	researchRuns: "research_runs",
+	researchSources: "research_sources",
+	researchCriteria: "research_criteria",
+	criterionVerifications: "criterion_verifications",
+	researchReviews: "research_reviews",
+	firmApprovals: "firm_approvals",
 } as const;
 export type CollectionName = (typeof C)[keyof typeof C];
 
@@ -42,6 +49,13 @@ const INDEXED: Record<CollectionName, string[]> = {
 	review_actions: ["evaluationId"],
 	investment_decisions: ["evaluationId", "startupId"],
 	audit_events: ["eventType"],
+	investor_firms: [],
+	research_runs: ["firmId"],
+	research_sources: ["firmId"],
+	research_criteria: ["firmId"],
+	criterion_verifications: ["firmId"],
+	research_reviews: ["firmId"],
+	firm_approvals: ["firmId"],
 };
 
 export type StoreWrite = {
