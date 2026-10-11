@@ -1,6 +1,7 @@
 import { type CapabilityContext, defineCapability, errors, s } from "@appport/sdk";
 import { InvestError } from "../domain/errors.ts";
 import { ADAPTER_IDS, ACCESS_BASES, CONTRIBUTION_KINDS, type DatasetMapping, type ShareAudience } from "../domain/collab.ts";
+import { normalizeFirmUrl } from "../research/url.ts";
 import { attentionFor } from "../modules/investor-research.ts";
 import { CRITERION_FIELDS, RESEARCH_STATUSES, type CriterionField, type ResearchStatus, type ReviewAction } from "../domain/research.ts";
 import { METRIC_KEYS, OUTCOMES, SOURCE_TYPES, type Actor, type InvestmentCriterion, type ThesisSettings } from "../domain/types.ts";
@@ -978,7 +979,15 @@ export const directoryGet = defineCapability({
 	input: s.object({ domain: s.string() }),
 	output: out("profile"),
 	attributes: contract("read-only"),
-	handler: run(async (svc, _actor, input: { domain: string }) => ({ profile: await svc.participation.publishedFor(input.domain.trim().toLowerCase().replace(/^www\./, "")) })),
+	handler: run(async (svc, _actor, input: { domain: string }) => {
+		let domain: string;
+		try {
+			domain = normalizeFirmUrl(input.domain).canonicalDomain;
+		} catch {
+			throw new InvestError("invalid", "Give the firm's website domain");
+		}
+		return { profile: await svc.participation.publishedFor(domain) };
+	}),
 });
 
 const contributionInput = { kind: s.enum(CONTRIBUTION_KINDS), firmDomain: s.string(), field: s.optional(s.enum(CRITERION_FIELDS)), polarity: s.optional(s.enum(["include", "exclude"])), value: s.optional(s.string()), minUsd: s.optional(s.number()), maxUsd: s.optional(s.number()), text: s.string(), evidenceUrls: s.optional(s.array(s.string(), { maxItems: 5 })) };

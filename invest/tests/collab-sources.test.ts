@@ -69,6 +69,9 @@ describe("adapters", () => {
 		expect(a).toMatchObject({ company: "Gridcell", type: "seed_round", roundAmountUsd: 4_000_000 });
 		expect(a.investors).toEqual([{ name: "Meridian Ventures", role: "lead" }, { name: "Acme Capital", role: "participant" }, { name: "Northwind Capital", role: "participant" }]);
 		expect(parseAnnouncement("Our picks for the week.")).toBeNull();
+		const across = parseAnnouncement("Gridcell raised $4M led by Meridian Ventures. Gridcell is a climate company with offices in Madrid.")!;
+		expect(across.investors.map((i) => i.name)).toEqual(["Meridian Ventures"]); // a name never runs across a sentence boundary
+		expect(parseAnnouncement("a16z.com backs Lumen raises $3M")?.company ?? "ok").toBeTruthy();
 		const feed = ADAPTERS.funding_news_feed.parse({ body: (FUNDING_FEED().body as string), contentType: null, url: "https://x.example.com/f", mapping: null });
 		expect(feed.records.map((r) => r.name)).toEqual(["Gridcell", "Payvale"]);
 		expect(feed.errors.map((e) => e.message).sort()).toEqual(["instruction-like text discarded", "not a funding announcement"]);
@@ -384,6 +387,14 @@ describe("reconciliation", () => {
 		expect(stage.claims.find((c) => c.key === "claim:c")!.signals.corroboratedBy).toBe(1);
 		expect(stage.claims[0]!.reasons.join()).toContain("independent publishers");
 		expect(JSON.stringify(r)).not.toMatch(/confidence|score|probab/i);
+	});
+	it("does not count the firm's own site and its own representative as independent corroboration", () => {
+		const r = run([claim("site", "firm-site.vc", { category: "official_public_source", publisherKey: "firm:x.vc" }), claim("rep", "firm:x.vc", { category: "investor_verified", publisherKey: "firm:x.vc" }), claim("dir", "Directory")]);
+		const st = r.find((f) => f.field === "stage")!;
+		expect(st.claims.find((c) => c.key === "claim:site")!.signals.corroboratedBy).toBe(2); // the firm (once) and the directory
+		const onlyFirm = run([claim("site", "firm-site.vc", { category: "official_public_source", publisherKey: "firm:x.vc" }), claim("rep", "firm:x.vc", { category: "investor_verified", publisherKey: "firm:x.vc" })]).find((f) => f.field === "stage")!;
+		expect(onlyFirm.claims[0]!.signals.corroboratedBy).toBe(1);
+		expect(onlyFirm.status).toBe("single_source");
 	});
 	it("surfaces conflicting check sizes, include-vs-exclude and disjoint sector sets, and never resolves them by count", () => {
 		const size = (id: string, p: string, min: number, max: number) => claim(id, p, { field: "check_size", value: `usd_${min}_${max}`, valueRange: { minUsd: min, maxUsd: max }, label: `${min}-${max}` });

@@ -18,7 +18,7 @@ const STAGE = "(?:pre[- ]?seed|seed|series [a-e]\\+?|follow[- ]on|bridge)";
 /** Same words, either case, for the company patterns (which must stay case-sensitive for the name itself). */
 const STAGE_ANYCASE = "(?:[Pp]re[- ]?[Ss]eed|[Ss]eed|[Ss]eries [A-Ea-e]\\+?|[Ff]ollow[- ]on|[Bb]ridge)";
 export const MONEY = "\\$\\s?(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s?([kK]|[tT]housand|MM|mm|[mM]|[mM]illion|[bB]n|[bB]|[bB]illion)?";
-export const NAME = "([A-Z][A-Za-z0-9&.'’-]*(?:\\s+(?:[A-Z][A-Za-z0-9&.'’-]*|of|the|&|and)){0,3})";
+export const NAME = "([A-Z][A-Za-z0-9&'’-]*(?:\\.[A-Za-z0-9&'’-]+)*(?:\\s+(?:[A-Z][A-Za-z0-9&'’-]*(?:\\.[A-Za-z0-9&'’-]+)*|of|the|&|and)){0,3})";
 const INVOLVEMENT = /\b(?:led|co-led|co-leads|leads|participat\w+|joined|invest(?:ed|s|ing)? in|backed|backs|our investment|partner(?:ed|s)? with|alongside|proud to (?:back|support)|excited to (?:back|announce))\b/i;
 const ACQUISITION = /\b(?:acquir(?:e|ed|es|ing)|acquisition of)\b/i;
 const FOLLOW_ON = /\bfollow[- ]on\b/i;

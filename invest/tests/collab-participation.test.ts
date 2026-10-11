@@ -190,7 +190,7 @@ describe("representative approval, publication and the directory", () => {
 		const rec = await c.r.reconciliation.forFirm(c.r.A, aFirm.id);
 		const size = rec.fields.find((f) => f.field === "check_size")!;
 		expect(rec.published).toMatchObject({ canonicalDomain: "meridian.vc", version: 1 });
-		expect(size.approved).toEqual([{ id: ap.id, authority: "firm_representative", value: "usd_20000000_50000000" }]);
+		expect(size.approved).toEqual([{ id: ap.id, authority: "firm_representative", value: "$20M–$50M" }]);
 		expect(size.claims.some((x) => x.signals.category === "investor_verified" && x.signals.directness === "subject_stated")).toBe(true);
 		const clash = size.conflicts.filter((x) => x.kind === "conflicts_with_approved");
 		expect(clash.length).toBeGreaterThanOrEqual(2); // the website and the directory both disagree with the firm's own approved range

@@ -39,7 +39,8 @@ const base = (o: Partial<NormalizedRecord> & Pick<NormalizedRecord, "kind" | "na
 
 // ------------------------------------------------------------------------------ funding news (RSS/Atom)
 
-const INV = "[A-Z][A-Za-z0-9&.'’-]*(?:\\s+[A-Z][A-Za-z0-9&.'’-]*){0,3}";
+const TOK = "[A-Z][A-Za-z0-9&'’-]*(?:\\.[A-Za-z0-9&'’-]+)*";
+const INV = `${TOK}(?:\\s+${TOK}){0,3}`;
 const LIST = `(${INV}(?:\\s*(?:,|&|\\band\\b)\\s*${INV})*)`;
 const LEAD = new RegExp(`\\b(?:co-led|led|lead(?:s)?)\\s+by\\s+${LIST}`);
 const PART = new RegExp(`\\b(?:with\\s+participation\\s+from|participation\\s+from|backed\\s+by|investors\\s+(?:including|include)|joined\\s+by|alongside|also\\s+from)\\s+${LIST}`);

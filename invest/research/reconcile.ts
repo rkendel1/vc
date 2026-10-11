@@ -24,8 +24,10 @@ export type InClaim = {
 	label: string;
 	category: SourceCategory;
 	assertionType: "explicit" | "observed" | "inferred";
-	/** Who published it: used for independence (corroboration) and supersession. */
+	/** Who published it, for display. */
 	publisher: string;
+	/** Who is speaking, for independence. The firm's own site and its verified representative are one speaker. Defaults to `publisher`. */
+	publisherKey?: string;
 	passage: string;
 	url: string | null;
 	publishedAt: string | null;
@@ -35,11 +37,12 @@ export type InClaim = {
 	supersededBy: string | null;
 };
 
-export type InApproval = { id: string; field: CriterionField; polarity: "include" | "exclude"; value: string; valueRange: ReconciledClaim["valueRange"]; authority: "workspace" | "firm_representative" };
+export type InApproval = { label?: string; id: string; field: CriterionField; polarity: "include" | "exclude"; value: string; valueRange: ReconciledClaim["valueRange"]; authority: "workspace" | "firm_representative" };
 
 const SET_FIELDS: ReadonlySet<CriterionField> = new Set(["stage", "sector", "geography", "business_model"]);
 const DAY = 86_400_000;
 const claimKey = (c: { ref: { kind: string; id: string } }) => `${c.ref.kind}:${c.ref.id}`;
+const speaker = (c: { publisher: string; publisherKey?: string }) => c.publisherKey ?? c.publisher;
 const overlaps = (a: NonNullable<InClaim["valueRange"]>, b: NonNullable<InClaim["valueRange"]>) => (a.maxUsd ?? Number.POSITIVE_INFINITY) >= (b.minUsd ?? 0) && (b.maxUsd ?? Number.POSITIVE_INFINITY) >= (a.minUsd ?? 0);
 
 function directness(c: InClaim): ClaimSignals["directness"] {
@@ -67,7 +70,7 @@ export function reconcile(input: { claims: InClaim[]; approvals: InApproval[]; n
 	const nowMs = Date.parse(now);
 	const live = claims.filter(active);
 	// independent publishers per (field|polarity|value)
-	const publishersFor = (c: InClaim) => new Set(live.filter((x) => x.field === c.field && x.polarity === c.polarity && x.value === c.value && x.assertionType !== "inferred").map((x) => x.publisher));
+	const publishersFor = (c: InClaim) => new Set(live.filter((x) => x.field === c.field && x.polarity === c.polarity && x.value === c.value && x.assertionType !== "inferred").map(speaker));
 	const byField = new Map<CriterionField, InClaim[]>();
 	for (const c of claims) byField.set(c.field, [...(byField.get(c.field) ?? []), c]);
 	for (const a of approvals) if (!byField.has(a.field)) byField.set(a.field, []);
@@ -114,12 +117,12 @@ export function reconcile(input: { claims: InClaim[]; approvals: InApproval[]; n
 			for (let j = i + 1; j < sizes.length; j++) {
 				const a = sizes[i]!;
 				const b = sizes[j]!;
-				if (a.publisher !== b.publisher && !overlaps(a.valueRange!, b.valueRange!)) addConflict("check_size_differs", `${a.publisher} says ${a.label}; ${b.publisher} says ${b.label}.`, [claimKey(a), claimKey(b)], [], ["the ranges do not overlap", "different publishers"]);
+				if (speaker(a) !== speaker(b) && !overlaps(a.valueRange!, b.valueRange!)) addConflict("check_size_differs", `${a.publisher} says ${a.label}; ${b.publisher} says ${b.label}.`, [claimKey(a), claimKey(b)], [], ["the ranges do not overlap", "different publishers"]);
 			}
 		// disjoint sets from different publishers
 		if (SET_FIELDS.has(field)) {
 			const byPub = new Map<string, InClaim[]>();
-			for (const c of policy.filter((x) => x.polarity === "include")) byPub.set(c.publisher, [...(byPub.get(c.publisher) ?? []), c]);
+			for (const c of policy.filter((x) => x.polarity === "include")) byPub.set(speaker(c), [...(byPub.get(speaker(c)) ?? []), c]);
 			const pubs = [...byPub.entries()];
 			for (let i = 0; i < pubs.length; i++)
 				for (let j = i + 1; j < pubs.length; j++) {
@@ -142,16 +145,16 @@ export function reconcile(input: { claims: InClaim[]; approvals: InApproval[]; n
 			}
 		}
 
-		const fieldPublishers = new Set(fieldLive.filter((c) => c.assertionType !== "inferred").map((c) => c.publisher));
+		const fieldPublishers = new Set(fieldLive.filter((c) => c.assertionType !== "inferred").map(speaker));
 		const corroborated = fieldLive.some((c) => c.assertionType !== "inferred" && publishersFor(c).size >= 2);
 		const open = conflicts.filter((c) => c.reviewState !== "accepted");
 		const explanation: string[] = [];
-		for (const ap of fieldApprovals) explanation.push(`${ap.authority === "firm_representative" ? "Approved by a verified firm representative" : "Approved by this workspace"}: ${ap.value.replace(/_/g, " ")}. Other sources do not override it.`);
+		for (const ap of fieldApprovals) explanation.push(`${ap.authority === "firm_representative" ? "Approved by a verified firm representative" : "Approved by this workspace"}: ${(ap.label ?? ap.value).replace(/_/g, " ")}. Other sources do not override it.`);
 		if (!fieldLive.length) explanation.push("No current claims: unknown.");
 		else if (open.length) explanation.push(`${open.length} unresolved conflict(s); nothing was resolved automatically.`);
 		else if (corroborated) explanation.push("Independent publishers agree on at least one value.");
 		else explanation.push(`${fieldPublishers.size || 1} publisher(s); not independently corroborated.`);
-		out.push({ field, status: open.length ? "conflicted" : corroborated ? "agreed" : "single_source", claims: reconciled.sort((a, b) => a.value.localeCompare(b.value) || a.publisher.localeCompare(b.publisher)), conflicts, approved: fieldApprovals.map((a) => ({ id: a.id, authority: a.authority, value: a.value })), explanation });
+		out.push({ field, status: open.length ? "conflicted" : corroborated ? "agreed" : "single_source", claims: reconciled.sort((a, b) => a.value.localeCompare(b.value) || a.publisher.localeCompare(b.publisher)), conflicts, approved: fieldApprovals.map((a) => ({ id: a.id, authority: a.authority, value: a.label ?? a.value })), explanation });
 	}
 	return out.sort((a, b) => a.field.localeCompare(b.field));
 }

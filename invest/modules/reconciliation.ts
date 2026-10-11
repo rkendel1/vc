@@ -1,6 +1,7 @@
 import type { Claim, FieldReconciliation, LifecycleState, ReconciledClaim, SourceCategory, SourceRecord } from "../domain/collab.ts";
 import type { CriterionView, EventReviewState, FirmApproval, ResearchReview } from "../domain/research.ts";
 import type { Actor } from "../domain/types.ts";
+import { checkSizeLabel } from "../research/extract.ts";
 import { type InApproval, type InClaim, reconcile } from "../research/reconcile.ts";
 import { C, type InvestStore } from "../store/store.ts";
 import { type InvestorResearchModule, currentApprovals, reviewStateOf } from "./investor-research.ts";
@@ -67,7 +68,7 @@ export class ReconciliationModule {
 		for (const c of profile.criteria) {
 			if (c.field === "application_requirements") continue;
 			const n = exclusion(c);
-			inClaims.push({ ref: { kind: "criterion", id: c.id }, field: n.field, polarity: c.polarity, value: n.value, valueRange: c.valueRange, label: c.label, category: "official_public_source", assertionType: c.assertionType, publisher: host(c.source?.finalUrl, domain), passage: c.passage, url: c.source?.finalUrl ?? null, publishedAt: null, capturedAt: c.lastConfirmedAt, lifecycle: lifecycleOf(reviewStateOf(c.reviews, "unreviewed")), supersededBy: null });
+			inClaims.push({ ref: { kind: "criterion", id: c.id }, field: n.field, polarity: c.polarity, value: n.value, valueRange: c.valueRange, label: c.label, category: "official_public_source", assertionType: c.assertionType, publisher: host(c.source?.finalUrl, domain), publisherKey: `firm:${domain}`, passage: c.passage, url: c.source?.finalUrl ?? null, publishedAt: null, capturedAt: c.lastConfirmedAt, lifecycle: lifecycleOf(reviewStateOf(c.reviews, "unreviewed")), supersededBy: null });
 		}
 
 		// Third-party claims: a newer version of the same source record replaces the older one's claims.
@@ -91,11 +92,11 @@ export class ReconciliationModule {
 			inClaims.push({ ref: { kind: "contribution", id: ct.id }, field: c.field, polarity: c.polarity, value: c.value, valueRange: c.valueRange, label: c.valueRange ? c.value : c.value.replace(/_/g, " "), category: ct.category, assertionType: "explicit", publisher: `contributor:${ct.authorId}`, passage: ct.text, url: ct.evidenceUrls[0] ?? null, publishedAt: null, capturedAt: ct.createdAt, lifecycle, supersededBy: null });
 		}
 
-		const approvals: InApproval[] = currentApprovals(await this.deps.research.approvalsFor(actor, firmId)).map((a: FirmApproval) => ({ id: a.id, field: a.field, polarity: a.polarity, value: a.value, valueRange: a.valueRange, authority: a.authority ?? "workspace" }));
+		const approvals: InApproval[] = currentApprovals(await this.deps.research.approvalsFor(actor, firmId)).map((a: FirmApproval) => ({ id: a.id, field: a.field, polarity: a.polarity, value: a.value, valueRange: a.valueRange, label: a.valueRange ? checkSizeLabel(a.valueRange) : undefined, authority: a.authority ?? "workspace" }));
 		if (published) {
 			for (const pc of published.criteria) {
-				inClaims.push({ ref: { kind: "published", id: `${published.id}:${pc.approvalId}` }, field: pc.field, polarity: pc.polarity, value: pc.value, valueRange: pc.valueRange, label: pc.label, category: "investor_verified", assertionType: "explicit", publisher: `firm:${published.canonicalDomain}`, passage: `Published by a verified representative of ${published.firmName} (version ${published.version}).`, url: null, publishedAt: published.publishedAt, capturedAt: published.publishedAt, lifecycle: "accepted", supersededBy: null });
-				if (!approvals.some((a) => a.id === pc.approvalId)) approvals.push({ id: pc.approvalId, field: pc.field, polarity: pc.polarity, value: pc.value, valueRange: pc.valueRange, authority: "firm_representative" });
+				inClaims.push({ ref: { kind: "published", id: `${published.id}:${pc.approvalId}` }, field: pc.field, polarity: pc.polarity, value: pc.value, valueRange: pc.valueRange, label: pc.label, category: "investor_verified", assertionType: "explicit", publisher: `firm:${published.canonicalDomain}`, publisherKey: `firm:${published.canonicalDomain}`, passage: `Published by a verified representative of ${published.firmName} (version ${published.version}).`, url: null, publishedAt: published.publishedAt, capturedAt: published.publishedAt, lifecycle: "accepted", supersededBy: null });
+				if (!approvals.some((a) => a.id === pc.approvalId)) approvals.push({ label: pc.valueRange ? pc.label : undefined, id: pc.approvalId, field: pc.field, polarity: pc.polarity, value: pc.value, valueRange: pc.valueRange, authority: "firm_representative" });
 			}
 		}
 

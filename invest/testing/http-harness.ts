@@ -15,6 +15,10 @@ export const TOKENS = {
 	aAnalyst: "token-a-analyst-0002",
 	aViewer: "token-a-viewer-0003",
 	bPartner: "token-b-partner-0004",
+	fFounder: "token-f-founder-0005",
+	f2Founder: "token-f2-founder-0006",
+	rRep: "token-r-rep-0007",
+	mModerator: "token-m-moderator-0008",
 } as const;
 
 export type HttpHarness = {
@@ -33,12 +37,20 @@ export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: n
 			workspaces: [
 				{ id: "ws-a", name: "Fund A" },
 				{ id: "ws-b", name: "Fund B" },
+				{ id: "ws-f", name: "Founder workspace" },
+				{ id: "ws-f2", name: "Second founder workspace" },
+				{ id: "ws-rep", name: "Meridian representatives" },
+				{ id: "ws-mod", name: "Platform moderation" },
 			],
 			principals: [
 				{ id: "alice", displayName: "Alice (partner)", workspaceId: "ws-a", role: "partner", tokenSha256: sha256Hex(TOKENS.aPartner) },
 				{ id: "arun", displayName: "Arun (analyst)", workspaceId: "ws-a", role: "analyst", tokenSha256: sha256Hex(TOKENS.aAnalyst) },
 				{ id: "vera", displayName: "Vera (viewer)", workspaceId: "ws-a", role: "viewer", tokenSha256: sha256Hex(TOKENS.aViewer) },
 				{ id: "bob", displayName: "Bob (other fund)", workspaceId: "ws-b", role: "partner", tokenSha256: sha256Hex(TOKENS.bPartner) },
+				{ id: "fay", displayName: "Fay (founder)", workspaceId: "ws-f", role: "founder", tokenSha256: sha256Hex(TOKENS.fFounder) },
+				{ id: "fred", displayName: "Fred (founder)", workspaceId: "ws-f2", role: "founder", tokenSha256: sha256Hex(TOKENS.f2Founder) },
+				{ id: "rita", displayName: "Rita (firm representative)", workspaceId: "ws-rep", role: "investor_rep", tokenSha256: sha256Hex(TOKENS.rRep) },
+				{ id: "mona", displayName: "Mona (moderator)", workspaceId: "ws-mod", role: "moderator", tokenSha256: sha256Hex(TOKENS.mModerator) },
 			],
 		}),
 	);
