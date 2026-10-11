@@ -114,3 +114,32 @@ describe("claim diff", () => {
 		expect(approvals).toHaveLength(1);
 	});
 });
+
+describe("monitoring health (is anything running the schedule?)", async () => {
+	const { monitoringHealth, overdueGraceMs } = await import("../domain/research.ts");
+	const now = new Date("2026-10-11T12:00:00Z");
+	const t = (over: Partial<Parameters<typeof monitoringHealth>[0][number]> = {}) => ({ enabled: true, intervalMinutes: 1440, nextCheckAt: "2026-10-11T12:30:00Z", consecutiveFailures: 0, running: false, ...over });
+	const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
+
+	it("a target merely waiting for its time is healthy; one well past its time with nobody checking is overdue", () => {
+		expect(monitoringHealth([t()], now).schedulerLikelyMissing).toBe(false);
+		expect(monitoringHealth([t({ nextCheckAt: minutesAgo(5) })], now).schedulerLikelyMissing).toBe(false); // inside the grace window
+		const h = monitoringHealth([t({ intervalMinutes: 60, nextCheckAt: minutesAgo(30) }), t({ nextCheckAt: minutesAgo(600) })], now);
+		expect(h).toMatchObject({ overdue: 2, schedulerLikelyMissing: true, oldestOverdueMinutes: 600 });
+	});
+	it("scales the grace with the interval and never drops below ten minutes", () => {
+		expect(overdueGraceMs(5)).toBe(10 * 60_000);
+		expect(overdueGraceMs(1440)).toBe(360 * 60_000);
+		expect(monitoringHealth([t({ nextCheckAt: minutesAgo(300) })], now).overdue).toBe(0);
+		expect(monitoringHealth([t({ nextCheckAt: minutesAgo(400) })], now).overdue).toBe(1);
+	});
+	it("ignores paused targets, targets being checked right now and targets with no schedule; says nothing when there are none", () => {
+		const late = minutesAgo(2000);
+		expect(monitoringHealth([t({ enabled: false, nextCheckAt: late }), t({ running: true, nextCheckAt: late }), t({ nextCheckAt: null })], now)).toMatchObject({ overdue: 0, schedulerLikelyMissing: false });
+		expect(monitoringHealth([], now)).toMatchObject({ enabled: 0, overdue: 0, schedulerLikelyMissing: false });
+	});
+	it("repeated failures are alert-worthy on their own, even though the schedule keeps moving", () => {
+		expect(monitoringHealth([t({ consecutiveFailures: 2 })], now).failing).toBe(0);
+		expect(monitoringHealth([t({ consecutiveFailures: 3 })], now)).toMatchObject({ failing: 1, schedulerLikelyMissing: false });
+	});
+});

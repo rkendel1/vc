@@ -364,6 +364,66 @@
       ]
     },
     {
+      "name": "claim.directory",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Representative claims a moderator has decided (verified, rejected, revoked), across workspaces, with provenance, history, what they published, and who else holds authority for the firm. Challenges are not included.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "moderation.review"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Representative claims a moderator has decided (verified, rejected, revoked), across workspaces, with provenance, history, what they published, and who else holds authority for the firm. Challenges are not included.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "moderation.review"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
       "name": "claim.pending",
       "versions": [
         1
@@ -454,6 +514,18 @@
               "type": "string"
             },
             "maxItems": 10
+          },
+          "expectedStatus": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "verified",
+              "rejected",
+              "revoked"
+            ]
+          },
+          "keepPublished": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -508,6 +580,18 @@
                   "type": "string"
                 },
                 "maxItems": 10
+              },
+              "expectedStatus": {
+                "type": "string",
+                "enum": [
+                  "requested",
+                  "verified",
+                  "rejected",
+                  "revoked"
+                ]
+              },
+              "keepPublished": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false,

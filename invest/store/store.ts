@@ -1,6 +1,7 @@
 import { ConditionalConflictError, FileJsDb, getTelemetryClient, open, parseFlowSpec, validateFlowSpec, type StateFirstDB } from "@feltdb/core";
 import { readFileSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { newId, type Clock, systemClock } from "../domain/canonical.ts";
 import { conflict } from "../domain/errors.ts";
@@ -107,6 +108,24 @@ function stripVersion(value: Record<string, unknown>): Record<string, unknown> {
 	return rest;
 }
 
+/**
+ * When neither state.json nor state.json.backup can be read, FeltDB "reinitializes state" and carries on EMPTY, which looks like a working
+ * system that lost everything. For confidential deal data, refuse instead and let the operator restore from a backup.
+ */
+async function refuseUnreadableSnapshot(dir: string): Promise<void> {
+	const names = await readdir(dir);
+	if (!names.some((n) => /^state\./.test(n) && n !== "state.lock")) return; // a new directory
+	for (const name of ["state.json", "state.json.backup"]) {
+		try {
+			JSON.parse(await readFile(join(dir, name), "utf8"));
+			return;
+		} catch {
+			// try the next copy
+		}
+	}
+	throw new Error(`The database in ${dir} has no readable snapshot (state.json and state.json.backup). Refusing to start empty; restore from a backup (bun run restore).`);
+}
+
 export class InvestStore {
 	constructor(
 		private readonly db: StateFirstDB,
@@ -122,6 +141,7 @@ export class InvestStore {
 			getTelemetryClient().disable();
 		}
 		await mkdir(dir, { recursive: true, mode: 0o700 });
+		await refuseUnreadableSnapshot(dir);
 		const store = new InvestStore(await open(new FileJsDb(dir)), clock);
 		await store.init();
 		return store;
@@ -175,7 +195,19 @@ export class InvestStore {
 	 * Commits writes, preconditions and their audit events as one atomic FeltDB transaction.
 	 * A lost race surfaces as a `conflict`; nothing is written.
 	 */
-	async commit(actor: Pick<Actor, "principalId" | "workspaceId">, input: { writes: StoreWrite[]; preconditions?: StorePrecondition[]; audit: AuditInput[] }): Promise<AuditEvent[]> {
+	async commit(
+		actor: Pick<Actor, "principalId" | "workspaceId">,
+		input: {
+			writes: StoreWrite[];
+			preconditions?: StorePrecondition[];
+			audit: AuditInput[];
+			/**
+			 * The same audit events, also written to another workspace's history in the SAME transaction (a moderator deciding on a record
+			 * that lives in a claimant's workspace: both histories get the event, or neither does). Writes are still confined to the actor's workspace.
+			 */
+			mirrorAudit?: { workspaceId: string; actorId: string }[];
+		},
+	): Promise<AuditEvent[]> {
 		const timestamp = this.now();
 		const events: AuditEvent[] = input.audit.map((a) => ({
 			id: newId("aud"),
@@ -186,6 +218,7 @@ export class InvestStore {
 			timestamp,
 			payload: a.payload ?? {},
 		}));
+		const mirrors: AuditEvent[] = (input.mirrorAudit ?? []).flatMap((m) => events.map((e) => ({ ...e, id: newId("aud"), workspaceId: m.workspaceId, actorId: m.actorId })));
 		for (const write of input.writes) {
 			if (write.value.workspaceId !== actor.workspaceId)
 				throw new Error(`refusing cross-workspace write to ${write.collection}/${write.id}`);
@@ -207,7 +240,7 @@ export class InvestStore {
 						...(w.create ? { requireAbsent: true } : {}),
 						...(w.ifVersion !== undefined ? { ifVersion: w.ifVersion } : {}),
 					})),
-					...events.map((e) => ({ collection: C.audit, id: e.id, value: e as unknown as Record<string, unknown>, requireAbsent: true })),
+					...[...events, ...mirrors].map((e) => ({ collection: C.audit, id: e.id, value: e as unknown as Record<string, unknown>, requireAbsent: true })),
 				],
 			});
 		} catch (error) {

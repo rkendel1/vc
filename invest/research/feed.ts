@@ -33,10 +33,27 @@ export function parseFeed(body: string): ParsedFeed {
 	const text = body.slice(0, 2_000_000).replace(/^\uFEFF/, "");
 	if (!looksLikeFeed(text)) return { ok: false, error: "not an RSS or Atom document" };
 	const atom = /<feed\b/i.test(text.slice(0, 2000));
-	const itemRe = atom ? /<entry\b[^>]*>([\s\S]*?)<\/entry\s*>/gi : /<item\b[^>]*>([\s\S]*?)<\/item\s*>/gi;
 	const items: FeedItem[] = [];
-	for (const m of text.matchAll(itemRe)) {
-		const block = m[1]!;
+	// A linear scan with indexOf, not a lazy regex over the whole document: an attacker's unclosed or endlessly repeated tags cost O(n), not O(n²).
+	const lower = text.toLowerCase();
+	const open = atom ? "<entry" : "<item";
+	const close = atom ? "</entry" : "</item";
+	let pos = 0;
+	while (items.length < MAX_FEED_ITEMS) {
+		const start = lower.indexOf(open, pos);
+		if (start < 0) break;
+		if (/[a-z0-9:]/.test(lower[start + open.length] ?? "")) {
+			pos = start + open.length;
+			continue;
+		}
+		const gt = lower.indexOf(">", start);
+		if (gt < 0) break;
+		const end = lower.indexOf(close, gt);
+		if (end < 0) break; // unclosed: nothing after it can be trusted
+		const tail = lower.indexOf(">", end);
+		pos = tail < 0 ? end + close.length : tail + 1;
+		if (lower[gt - 1] === "/") continue;
+		const block = text.slice(gt + 1, end).slice(0, 100_000);
 		const title = strip(tag(block, "title") ?? "");
 		let link: string | null = null;
 		if (atom) {
@@ -48,7 +65,6 @@ export function parseFeed(body: string): ParsedFeed {
 		const summary = strip(tag(block, atom ? "summary" : "description") ?? tag(block, "content:encoded") ?? tag(block, "content") ?? "");
 		if (!title && !summary) continue;
 		items.push({ title: title.slice(0, 300), link: link ? decodeEntities(link.trim()).slice(0, 2048) : null, publishedAt: toIsoDate(date ? strip(date) : null), summary: summary.slice(0, 2000) });
-		if (items.length >= MAX_FEED_ITEMS) break;
 	}
 	const unterminated = (atom ? /<entry\b/gi : /<item\b/gi).test(text) && !items.length;
 	if (unterminated) return { ok: false, error: "feed entries are malformed or empty" };

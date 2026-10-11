@@ -149,28 +149,99 @@ export class ParticipationModule {
 			.sort((a, b) => a.claim.requestedAt.localeCompare(b.claim.requestedAt));
 	}
 
-	async reviewClaim(actor: Actor, input: { claimId: string; decision: "verify" | "reject" | "revoke"; rationale: string; evidence?: string[] }): Promise<ClaimEvent> {
+	/**
+	 * A moderator's decision on a representative claim.
+	 *
+	 * Consistency protocol (FeltDB gives one atomic transaction across collections; it does not know about workspaces, so this store
+	 * confines each write to one workspace explicitly):
+	 *  - ONE transaction writes the decision event, the fenced claim record (and, on revocation, the withdrawal of what that
+	 *    representative published), the claimant's audit event, and a mirror of it in the moderator's own history. All of it happens or none of it.
+	 *  - The claim record is written with `ifVersion`: two moderators deciding at once cannot both succeed; the loser re-reads and is told
+	 *    what happened. `expectedStatus` refuses a decision taken on a stale view.
+	 *  - A retry of the same decision by the same moderator (same state, same reason) returns the recorded event instead of writing another.
+	 * Failure cases: a rejected transaction writes nothing and records nothing; there is no state in which a decision exists without its audit.
+	 */
+	async reviewClaim(actor: Actor, input: { claimId: string; decision: "verify" | "reject" | "revoke"; rationale: string; evidence?: string[]; expectedStatus?: ClaimStatus; keepPublished?: boolean }): Promise<ClaimEvent & { effects?: { withdrawnPublishedVersion: number | null; otherVerifiedRepresentatives: number } }> {
 		if (!actor.permissions.includes("moderation.review")) throw forbidden("Reviewing claims needs the moderation.review permission");
-		const claim = (await this.store.scanAll<RepresentativeClaim>(C.representativeClaims)).find((c) => c.id === input.claimId);
-		if (!claim) throw notFound("Claim");
+		const located = (await this.store.scanAll<RepresentativeClaim>(C.representativeClaims)).find((c) => c.id === input.claimId);
+		if (!located) throw notFound("Claim");
 		const rationale = input.rationale?.trim() ?? "";
 		if (rationale.length < 10 || rationale.length > 2000) throw invalid("A rationale of 10–2000 characters is required");
-		const events = await this.eventsOf(claim.workspaceId, claim.id);
-		const status = claimStatusOf(events);
 		const evidence = (input.evidence ?? []).map((e) => clip(String(e).trim(), 300)).filter(Boolean).slice(0, 10);
-		if (input.decision === "verify") {
-			if (status === "verified") throw precondition("This claim is already verified");
-			const proofOk = events.some((e) => e.kind === "proof_checked" && e.data?.proofOk);
-			if (!proofOk && !evidence.length) throw invalid("Verifying needs evidence: a successful domain proof or documented evidence you reviewed");
+		const kind: ClaimEvent["kind"] = input.decision === "verify" ? "verified" : input.decision === "reject" ? "rejected" : "revoked";
+		for (let attempt = 0; attempt < 4; attempt++) {
+			const claim = await this.store.get<RepresentativeClaim & { __version?: number }>(C.representativeClaims, located.id, located.workspaceId);
+			if (!claim) throw notFound("Claim");
+			const events = (await this.eventsOf(claim.workspaceId, claim.id)).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+			const status = claimStatusOf(events);
+			const decisive = [...events].reverse().find((e) => ["verified", "rejected", "revoked"].includes(e.kind)) ?? null;
+			if (input.expectedStatus && input.expectedStatus !== status) throw precondition(`This claim changed since you opened it (it is now ${status}). Reload and decide again.`, { currentStatus: status });
+			// A retry of a decision that already went through is answered with that decision, not refused and not repeated.
+			if (decisive && decisive.kind === kind && decisive.actorId === actor.principalId && decisive.rationale === rationale) return decisive;
+			if (kind === "verified" && status === "verified") throw precondition("This claim is already verified");
+			if (kind === "rejected" && status === "verified") throw precondition("Revoke a verified claim instead of rejecting it");
+			if (kind === "rejected" && status === "rejected") throw precondition("This claim is already rejected");
+			if (kind === "revoked" && status !== "verified") throw precondition("Only a verified claim can be revoked");
+			// A proof counts only if it was checked after the last decision: control of a domain can be lost, so re-verification needs a fresh one.
+			const sinceDecision = decisive ? events.filter((e) => e.at > decisive.at || (e.at === decisive.at && e.id > decisive.id)) : events;
+			const proofOk = sinceDecision.some((e) => e.kind === "proof_checked" && e.data?.proofOk);
+			if (kind === "verified" && !proofOk && !evidence.length) throw invalid("Verifying needs evidence: a domain proof checked since the last decision, or documented evidence you reviewed");
+			const at = this.store.now();
+			const ev: ClaimEvent = { id: newSortableId("ce"), workspaceId: claim.workspaceId, claimId: claim.id, kind, actorId: actor.principalId, rationale, data: { evidence, proofOk }, at };
+			const writes: StoreWrite[] = [
+				{ collection: C.claimEvents, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true },
+				{ collection: C.representativeClaims, id: claim.id, value: { ...claim, lastDecisionId: ev.id } as unknown as Record<string, unknown>, ifVersion: claim.__version },
+			];
+			const audit = [{ eventType: `claim.${kind}`, entityRef: { type: "representative_claim", id: claim.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, firmName: claim.firmName, principal: claim.principalId, decisionId: ev.id, previousStatus: status, rationale, evidence: evidence.length } }];
+			// Revocation ends this person's authority. What they already published is withdrawn with it, unless the moderator keeps it:
+			// the published versions and their provenance stay in the history either way.
+			let withdrawnVersion: number | null = null;
+			if (kind === "revoked" && !input.keepPublished) {
+				const latest = (await this.store.scanAll<PublishedProfile>(C.publishedProfiles)).filter((p) => p.canonicalDomain === claim.canonicalDomain).sort((a, b) => b.version - a.version)[0];
+				if (latest && !latest.withdrawn && latest.claimId === claim.id) {
+					const version = latest.version + 1;
+					const profile: PublishedProfile = { id: `pp_${sha256Hex(`${claim.canonicalDomain}|${version}`).slice(0, 32)}`, workspaceId: claim.workspaceId, canonicalDomain: claim.canonicalDomain, firmName: latest.firmName, version, supersedesId: latest.id, criteria: [], withdrawn: true, note: clip(`Withdrawn because the publishing representative's verification was revoked: ${rationale}`, 1000), claimId: claim.id, publishedBy: actor.principalId, publishedAt: at };
+					writes.push({ collection: C.publishedProfiles, id: profile.id, value: profile as unknown as Record<string, unknown>, create: true });
+					audit.push({ eventType: "profile.unpublished", entityRef: { type: "published_profile", id: profile.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, firmName: latest.firmName, principal: claim.principalId, decisionId: ev.id, previousStatus: "published", rationale, evidence: 0, version } as never });
+					withdrawnVersion = version;
+				}
+			}
+			try {
+				await this.store.commit(this.onBehalf(actor, claim.workspaceId), { writes, audit, mirrorAudit: [{ workspaceId: actor.workspaceId, actorId: actor.principalId }] });
+			} catch (error) {
+				if ((error as { code?: string }).code === "conflict" && attempt < 3) continue; // another decision or publication landed first: re-read and decide against the new state
+				if ((error as { code?: string }).code === "conflict") throw conflict("Another decision on this claim was recorded at the same moment. Reload and decide again.");
+				throw error;
+			}
+			const all = await this.store.scanAll<ClaimEvent>(C.claimEvents);
+			const others = (await this.store.scanAll<RepresentativeClaim>(C.representativeClaims)).filter((c) => c.canonicalDomain === claim.canonicalDomain && c.id !== claim.id && claimStatusOf(all.filter((e) => e.claimId === c.id)) === "verified").length;
+			return { ...ev, effects: { withdrawnPublishedVersion: withdrawnVersion, otherVerifiedRepresentatives: others } };
 		}
-		if (input.decision === "revoke" && status !== "verified") throw precondition("Only a verified claim can be revoked");
-		if (input.decision === "reject" && status === "verified") throw precondition("Revoke a verified claim instead of rejecting it");
-		const kind = input.decision === "verify" ? "verified" : input.decision === "reject" ? "rejected" : "revoked";
-		const ev: ClaimEvent = { id: newSortableId("ce"), workspaceId: claim.workspaceId, claimId: claim.id, kind, actorId: actor.principalId, rationale, data: { evidence, proofOk: events.some((e) => e.kind === "proof_checked" && e.data?.proofOk) }, at: this.store.now() };
-		await this.store.commit(this.onBehalf(actor, claim.workspaceId), { writes: [{ collection: C.claimEvents, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: `claim.${kind}`, entityRef: { type: "representative_claim", id: claim.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, principal: claim.principalId, rationale, evidence: evidence.length } }] });
-		// The decision is recorded in the claimant's workspace (where the claim lives) and again in the moderator's own history, so who decided what is visible to both.
-		await this.store.commit(actor, { writes: [], audit: [{ eventType: "moderation.claim_decided", entityRef: { type: "representative_claim", id: claim.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, firmName: claim.firmName, decision: kind, rationale, evidence: evidence.length } }] });
-		return ev;
+		throw conflict("This claim is changing too quickly; reload and try again");
+	}
+
+	/** Moderator view of every decided claim: who is verified for which firm, on what basis, and what revoking them would change. */
+	async claimDirectory(actor: Actor) {
+		if (!actor.permissions.includes("moderation.review")) throw forbidden("Reviewing claims needs the moderation.review permission");
+		const [claims, events, published, approvals] = await Promise.all([this.store.scanAll<RepresentativeClaim>(C.representativeClaims), this.store.scanAll<ClaimEvent>(C.claimEvents), this.store.scanAll<PublishedProfile>(C.publishedProfiles), this.store.scanAll<FirmApproval>(C.firmApprovals)]);
+		const statusOf = new Map(claims.map((c) => [c.id, claimStatusOf(events.filter((e) => e.claimId === c.id))] as const));
+		return claims
+			.filter((c) => statusOf.get(c.id) !== "requested")
+			.map((c) => {
+				const mine = events.filter((e) => e.claimId === c.id).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+				const status = statusOf.get(c.id)!;
+				const latest = published.filter((p) => p.canonicalDomain === c.canonicalDomain).sort((a, b) => b.version - a.version)[0] ?? null;
+				return {
+					claim: { id: c.id, canonicalDomain: c.canonicalDomain, firmName: c.firmName, requestedAt: c.requestedAt, relationship: c.relationship, principalId: c.principalId, workspaceId: c.workspaceId },
+					status,
+					events: mine.map((e) => ({ id: e.id, kind: e.kind, at: e.at, actorId: e.actorId, rationale: e.rationale, data: e.data })),
+					lastProof: [...mine].reverse().find((e) => e.kind === "proof_checked")?.data ?? null,
+					published: latest ? { version: latest.version, withdrawn: latest.withdrawn, publishedAt: latest.publishedAt, publishedByThisClaim: latest.claimId === c.id, criteria: latest.criteria.length } : null,
+					representativeApprovals: approvals.filter((a) => a.representativeClaimId === c.id && a.kind === "approve").length,
+					otherVerifiedRepresentatives: claims.filter((o) => o.canonicalDomain === c.canonicalDomain && o.id !== c.id && statusOf.get(o.id) === "verified").length,
+				};
+			})
+			.sort((a, b) => a.claim.canonicalDomain.localeCompare(b.claim.canonicalDomain) || a.claim.requestedAt.localeCompare(b.claim.requestedAt));
 	}
 
 	/** The actor's verified claim for a firm domain, or null. Authority is checked here, every time, from the stored events. */

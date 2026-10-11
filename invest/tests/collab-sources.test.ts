@@ -132,6 +132,8 @@ describe("curated source registry and monitoring", () => {
 		await expect(bad({ accessBasis: "unknown" })).rejects.toThrow("automated access is permitted");
 		await expect(bad({ termsNote: "ok" })).rejects.toThrow("terms");
 		for (const url of ["http://127.0.0.1/x.csv", "https://localhost/x.csv", "ftp://a.example.com/x", "https://user:pw@a.example.com/x.csv", "https://10.0.0.1/x.csv", "not a url"]) await expect(bad({ canonicalUrl: url })).rejects.toThrow("public http(s) URL");
+		for (const q of ["?api_key=abc", "?token=abc", "?X-Amz-Signature=abc", "?sessionid=1", "?password=x", "?a=1&access_token=z"]) await expect(bad({ canonicalUrl: `https://directory.example.com/investors.csv${q}` })).rejects.toThrow("credential");
+		await expect(bad({ canonicalUrl: "https://directory.example.com/investors.csv?page=2&format=csv" })).resolves.toBeDefined(); // ordinary parameters are fine
 		await expect(bad({ extraHosts: ["127.0.0.1"] })).rejects.toThrow("download host");
 		await expect(bad({ mapping: null })).rejects.toThrow("mapping");
 		await expect(bad({ adapter: "scraper" })).rejects.toThrow("Unknown adapter");

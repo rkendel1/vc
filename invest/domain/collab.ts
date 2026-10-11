@@ -264,6 +264,8 @@ export type RepresentativeClaim = {
 	/** Placed at https://<domain>/.well-known/attn-invest-claim.txt to show control of the domain. Evidence, not authority. */
 	challenge: string;
 	requestedAt: string;
+	/** The newest moderator decision on this claim. Every decision updates the claim record with a version fence, so two decisions can never both win. */
+	lastDecisionId?: string | null;
 };
 
 export type ClaimEvent = {

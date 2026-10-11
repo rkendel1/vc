@@ -1,5 +1,6 @@
 import type { FetchOutcome, ResearchLimits } from "../domain/research.ts";
 import { DEFAULT_PORTS, NetworkPolicyError, type Resolver, assertPublicDestination, systemResolver } from "./net-guard.ts";
+import { createPinnedFetch } from "./pinned-fetch.ts";
 import { ALLOW_ALL, DISALLOW_ALL_UNAVAILABLE, type RobotsRules, parseRobots, robotsAllows } from "./robots.ts";
 import { inScope } from "./url.ts";
 
@@ -53,9 +54,9 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
  *  - requests to one host are spaced by the larger of the configured delay and Crawl-delay;
  *  - timeouts, response size and content type are bounded; transient failures are retried with backoff;
  *  - no cookies, no credentials, no authentication; 401/402/403 are recorded as access restricted and not retried.
- * Known limit: the name is resolved and validated, then the platform resolves it again to connect;
- * a hostile DNS server could answer differently the second time. Run the job behind an egress
- * filter that blocks private ranges (see docs/invest/VC2_RESEARCH_PIPELINE.md).
+ * The connection itself is pinned (`pinned-fetch.ts`): the name is resolved by the socket's own lookup, every answer must be public, and the
+ * validated address is the one connected to, so a DNS answer that changes between the check and the connection cannot reach a private address.
+ * That governs the connection only; still run the job behind an egress filter that blocks private ranges (docs/invest/PRODUCTION_READINESS.md).
  */
 export class SafeHttpFetcher implements PageFetcher {
 	private readonly doFetch: typeof fetch;
@@ -68,8 +69,9 @@ export class SafeHttpFetcher implements PageFetcher {
 	private readonly backoff: number;
 
 	constructor(private readonly o: SafeFetcherOptions) {
-		this.doFetch = o.fetchImpl ?? fetch;
 		this.resolve = o.resolve ?? systemResolver;
+		// Production connections are pinned to the address validated at connect time; tests inject `fetchImpl`.
+		this.doFetch = o.fetchImpl ?? createPinnedFetch({ resolve: this.resolve });
 		this.ports = o.allowedPorts ?? DEFAULT_PORTS;
 		this.sleep = o.sleep ?? defaultSleep;
 		this.now = o.now ?? Date.now;
@@ -184,6 +186,8 @@ export class SafeHttpFetcher implements PageFetcher {
 				});
 			} catch (error) {
 				if (timeout.aborted) return this.fail(raw, current, "timeout", `no answer within ${limits.timeoutMs}ms`);
+				if (error instanceof NetworkPolicyError) return this.policyFailure(raw, current, error);
+				if ((error as { code?: string })?.code === "ENCODING") return this.fail(raw, current, "unsupported_content", (error as Error).message);
 				return this.fail(raw, current, "network_error", (error as Error)?.message?.slice(0, 160) ?? "network error");
 			}
 			if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {

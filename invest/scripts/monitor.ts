@@ -11,7 +11,7 @@
  * `--dry-run` lists what a cycle would check without touching the network or the store.
  */
 import { writeFile } from "node:fs/promises";
-import type { MonitoringTarget } from "../domain/research.ts";
+import { type MonitoringTarget, monitoringHealth } from "../domain/research.ts";
 import { MonitoringRunner } from "../modules/monitoring.ts";
 import { normalizeFirmUrl } from "../research/url.ts";
 import { C } from "../store/store.ts";
@@ -70,6 +70,7 @@ const intervalMinutes = int("interval-minutes", 15, 43_200);
 
 const stack = await openStack({ workspace, clock: nowOverride ? () => new Date(nowOverride!) : undefined, fail });
 const { monitoring, store, actor } = stack;
+const now = () => (nowOverride ? new Date(nowOverride) : new Date());
 let json: unknown = null;
 try {
 	if (command === "status") {
@@ -77,7 +78,11 @@ try {
 		for (const t of targets)
 			console.log(`${t.canonicalDomain.padEnd(32)} ${t.enabled ? "enabled" : "PAUSED "} every ${t.intervalMinutes}m  next ${t.nextCheckAt ?? "—"}  last attempt ${t.lastAttemptAt ?? "—"}  last success ${t.lastSuccessAt ?? "—"}  failures ${t.consecutiveFailures}${t.lease ? "  [checking]" : ""}${t.lastError ? `\n    last error: ${t.lastError.message}` : ""}`);
 		if (!targets.length) console.log("No monitoring targets. Register firms with: bun run research -- <file> --workspace <id>");
-		json = targets;
+		const health = monitoringHealth(targets.map((t) => ({ ...t, running: !!t.lease && Date.parse(t.lease.expiresAt) > now().getTime() })), now());
+		if (health.schedulerLikelyMissing) console.log(`\nALERT: ${health.overdue} enabled target(s) are overdue (oldest ${health.oldestOverdueMinutes} min). Nothing is running the schedule: start \`bun run monitor -- run --daemon\` or check your cron/systemd job.`);
+		if (health.failing) console.log(`ALERT: ${health.failing} target(s) have failed ${3}+ checks in a row.`);
+		process.exitCode = health.schedulerLikelyMissing || health.failing ? 1 : 0;
+		json = { targets, health };
 	} else if (command === "pause" || command === "resume") {
 		const domain = positional[1] ?? fail(`${command} needs a firm domain`);
 		const firm = await stack.research.lookup(actor, normalizeFirmUrl(domain).canonicalDomain);

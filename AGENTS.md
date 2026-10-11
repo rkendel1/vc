@@ -19,6 +19,7 @@ Toolchain: **Bun 1.3.13**. Do not use npm, yarn or pnpm.
 - Thresholds, hard gates, evidence standards, review routing and decision rules live in
   `invest/modules/investment-policy.ts` as pure functions, so `evaluation.verify` can recompute them.
   If you change policy output, bump `POLICY_VERSION`; if you change extraction, bump `EXTRACTOR_VERSION`.
+- Production posture (VC-7): `loadConfig` refuses unsafe production settings; dev identity serves loopback only; the identity registry is re-read on change and fails closed. A moderator decision and its audit records (claimant and moderator history) are ONE transaction (`commit` + `mirrorAudit`); keep it that way. Backup/restore go through `invest/scripts/lib/data-safety.ts`: they detect-and-abort, never overwrite, never carry secrets. Do not claim a guarantee `docs/invest/PRODUCTION_READINESS.md` does not state.
 - Findings, versions, decisions and audit events are immutable. Reviewer judgments are new records.
 - Workspace identity comes from the authenticated session, never from capability input.
 - After changing capabilities, run `bun run generate` and commit the manifest and generated client.

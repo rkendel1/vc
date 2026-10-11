@@ -6,14 +6,16 @@ import { Badge, ConfirmButton, EmptyState, ErrorNote, Loading, Notice, PageHead,
 
 type Any = Record<string, any>; // eslint-disable-line
 
-const DECISION_EVENTS = ["moderation.claim_decided", "match.confirmed", "match.rejected", "contribution.responded"];
-const CLAIM_VERB: Record<string, string> = { verified: "Verified a representative", rejected: "Rejected a representative claim", revoked: "Revoked a representative" };
+const DECISION_EVENTS = ["claim.verified", "claim.rejected", "claim.revoked", "match.confirmed", "match.rejected", "contribution.responded"];
 const DECISION_LABEL: Record<string, string> = {
+	"claim.verified": "Verified a representative",
+	"claim.rejected": "Rejected a representative claim",
+	"claim.revoked": "Revoked a representative",
 	"match.confirmed": "Confirmed two records are the same entity",
 	"match.rejected": "Decided two records are different entities",
 	"contribution.responded": "Responded to a shared contribution",
 };
-const decisionText = (e: Any) => (e.eventType === "moderation.claim_decided" ? (CLAIM_VERB[e.payload?.decision] ?? "Decided a representative claim") : (DECISION_LABEL[e.eventType] ?? e.eventType));
+const decisionText = (e: Any) => DECISION_LABEL[e.eventType] ?? e.eventType;
 
 /**
  * The moderator's start page: what needs a decision, most consequential first, with the evidence beside each item.
@@ -25,6 +27,7 @@ export function ReviewScreen() {
 	const matches = useLoad(() => call<{ open: Any[]; history: Any[] }>("match.list", {}), []);
 	const shared = useLoad(() => call<{ items: Any[] }>("contribution.queue", {}).then((r) => r.items), []);
 	const inbox = useLoad(() => call<{ items: Any[] }>("inbox.list", {}).then((r) => r.items), []);
+	const directory = useLoad(() => call<{ items: Any[] }>("claim.directory", {}).then((r) => r.items), []);
 	const history = useLoad(() => call<{ items: Any[] }>("audit.list", { limit: 200 }).then((r) => r.items), []);
 	const reloadAll = () => {
 		void claims.reload();
@@ -32,6 +35,7 @@ export function ReviewScreen() {
 		void shared.reload();
 		void inbox.reload();
 		void history.reload();
+		void directory.reload();
 	};
 	const conflicts = (inbox.data ?? []).filter((i) => i.kind === "conflict" || i.kind === "proposed_claim");
 	const counts = { claims: claims.data?.length ?? 0, matches: matches.data?.open.length ?? 0, shared: shared.data?.length ?? 0, conflicts: conflicts.length };
@@ -79,6 +83,11 @@ export function ReviewScreen() {
 						) : null}
 					</Section>) : null}
 
+					<Section title={`Representatives you have decided (${directory.data?.length ?? 0})`} id="directory-section">
+						<p className="muted small">Who is verified for which firm, on what basis. Revoking ends one person's authority; it does not touch anyone else's, and nothing already published is erased from the history.</p>
+						{directory.data?.length ? directory.data.map((d) => <DecidedClaim key={d.claim.id} d={d} reload={reloadAll} />) : <p className="empty">No claim has been decided yet.</p>}
+					</Section>
+
 					<Section title="Recent decisions" actions={<a href={href("history")}>Full history</a>}>
 						{recent.length ? (
 							<ul className="timeline" data-testid="recent-decisions">
@@ -107,7 +116,7 @@ function ClaimReview({ c, reload }: { c: Any; reload: () => void }) {
 	const proof = c.proof as { proofOk: boolean; proofDetail: string } | null;
 	const ready = why.trim().length >= 10;
 	const decide = (decision: "verify" | "reject") => async () => {
-		if (await a.run(() => call("claim.review", { claimId: c.claim.id, decision, rationale: why.trim(), evidence: ev.trim() ? [ev.trim()] : [] }))) reload();
+		if (await a.run(() => call("claim.review", { claimId: c.claim.id, decision, rationale: why.trim(), evidence: ev.trim() ? [ev.trim()] : [], expectedStatus: "requested" }))) reload();
 	};
 	return (
 		<article className="card review-card" data-testid="claim-review">
@@ -255,6 +264,104 @@ function ContributionResponse({ q, reload }: { q: Any; reload: () => void }) {
 					Dismiss
 				</button>
 			</div>
+		</article>
+	);
+}
+
+function DecidedClaim({ d, reload }: { d: Any; reload: () => void }) {
+	const [why, setWhy] = useState("");
+	const [keep, setKeep] = useState(false);
+	const a = useAction();
+	const status = d.status as string;
+	const ready = why.trim().length >= 10;
+	const verified = status === "verified";
+	const decide = (decision: "verify" | "revoke") => async () => {
+		if (await a.run(() => call("claim.review", { claimId: d.claim.id, decision, rationale: why.trim(), expectedStatus: status, ...(decision === "revoke" && keep ? { keepPublished: true } : {}), ...(decision === "verify" ? { evidence: [] } : {}) }))) {
+			setWhy("");
+			reload();
+		}
+	};
+	const last = d.events.filter((e: Any) => ["verified", "rejected", "revoked"].includes(e.kind)).at(-1);
+	const publishedHere = d.published && !d.published.withdrawn && d.published.publishedByThisClaim;
+	return (
+		<article className="card review-card" data-testid="decided-claim" data-status={status}>
+			<h3>
+				{d.claim.firmName} <span className="muted small">{d.claim.canonicalDomain}</span> <Badge tone={verified ? "ok" : "bad"}>{verified ? "Verified" : status === "revoked" ? "Revoked" : "Rejected"}</Badge>
+			</h3>
+			<dl className="facts">
+				<div>
+					<dt>Decision</dt>
+					<dd>
+						{last ? `${DECISION_LABEL[`claim.${last.kind}`] ?? last.kind} by ${last.actorId}, ${when(last.at)}: ${last.rationale}` : "—"}
+					</dd>
+				</div>
+				<div>
+					<dt>Basis</dt>
+					<dd>
+						{d.lastProof ? (d.lastProof.proofOk ? "Domain proof found" : "Domain proof not found") : "No domain proof checked"}
+						{last?.data?.evidence?.length ? `; ${last.data.evidence.length} item(s) of evidence you reviewed` : ""}
+					</dd>
+				</div>
+				<div>
+					<dt>What they did</dt>
+					<dd>
+						{d.representativeApprovals} criteria approved as the firm; {d.published ? (d.published.withdrawn ? `last published version ${d.published.version} was withdrawn` : `version ${d.published.version} is published${d.published.publishedByThisClaim ? " by this representative" : " by someone else"}`) : "nothing published"}
+					</dd>
+				</div>
+				<div>
+					<dt>Others with authority for this firm</dt>
+					<dd>{d.otherVerifiedRepresentatives}</dd>
+				</div>
+			</dl>
+			<details>
+				<summary>Full history ({d.events.length})</summary>
+				<ul className="timeline small">
+					{d.events.map((e: Any) => (
+						<li key={e.id}>
+							<strong>{String(e.kind).replace(/_/g, " ")}</strong> by {e.actorId}, {when(e.at)} — {clip(e.rationale, 200)}
+						</li>
+					))}
+				</ul>
+			</details>
+			<label className="field">
+				Your reason <span className="muted small">(required, at least 10 characters; recorded with your name)</span>
+				<input value={why} onChange={(e) => setWhy(e.target.value)} />
+			</label>
+			<ErrorNote error={a.error} />
+			{verified ? (
+				<div className="stack">
+					{publishedHere ? (
+						<label className="check small">
+							<input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Keep what they published visible (by default it is withdrawn with their authority)
+						</label>
+					) : null}
+					<ConfirmButton
+						label="Revoke verification…"
+						className="quiet danger"
+						danger
+						disabled={a.busy || !ready}
+						title={`Revoke ${d.claim.firmName}'s representative?`}
+						confirmLabel="Revoke verification"
+						consequence={
+							<div className="stack">
+								<p>This person can no longer approve, withdraw approvals, publish or unpublish for {d.claim.firmName}, immediately, including from a page they already have open.</p>
+								<p>{d.otherVerifiedRepresentatives ? `${d.otherVerifiedRepresentatives} other verified representative(s) keep their own authority.` : "Nobody else is verified for this firm."}</p>
+								<p>{publishedHere ? (keep ? "What they published stays visible." : `The published profile (version ${d.published.version}) is withdrawn; its history and provenance stay.`) : "Nothing they published is affected."} Their approvals stay on record. The decision and your reason are recorded in both histories.</p>
+							</div>
+						}
+						onConfirm={decide("revoke")}
+					/>
+				</div>
+			) : (
+				<ConfirmButton
+					label="Verify again…"
+					disabled={a.busy || !ready}
+					title={`Verify ${d.claim.firmName}'s representative again?`}
+					confirmLabel="Verify representative"
+					consequence={<p>This needs a domain proof checked after the last decision. They can then approve and publish for {d.claim.firmName} again.</p>}
+					onConfirm={decide("verify")}
+				/>
+			)}
 		</article>
 	);
 }
