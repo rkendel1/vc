@@ -377,6 +377,13 @@ export type EventEvidence = {
 	passage: string;
 	passageHash: string;
 	publishedAt: string | null;
+	/** The announcement date written in this passage, if any. */
+	announcedAt: string | null;
+	/** What this passage itself states. The event view fills gaps from here; the event record stays immutable. */
+	type: EventType;
+	round: string | null;
+	roundAmountUsd: number | null;
+	firmAmountUsd: number | null;
 	runId: string;
 	discoveredAt: string;
 };

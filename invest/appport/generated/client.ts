@@ -33,6 +33,15 @@ export type AppportPingV1Output = {
 export type AppportPingInput = AppportPingV1Input;
 export type AppportPingOutput = AppportPingV1Output;
 
+/** What needs a person across the workspace: new investment activity, proposed strategy changes, findings awaiting review, and research that is failing or stale. Each item appears once. */
+export type AttentionListV1Input = Record<string, never>;
+export type AttentionListV1Output = {
+  items: unknown;
+};
+
+export type AttentionListInput = AttentionListV1Input;
+export type AttentionListOutput = AttentionListV1Output;
+
 /** Append-only audit history for the caller's workspace, newest first. */
 export type AuditListV1Input = {
   entityId?: string;
@@ -278,6 +287,21 @@ export type FirmListV1Output = {
 export type FirmListInput = FirmListV1Input;
 export type FirmListOutput = FirmListV1Output;
 
+/** Pause or resume continuous monitoring of a firm, or change its interval or crawl bounds. Pausing keeps the profile and all history. */
+export type FirmMonitoringSetV1Input = {
+  firmId: string;
+  enabled?: boolean;
+  intervalMinutes?: number;
+  maxPages?: number;
+  maxDepth?: number;
+};
+export type FirmMonitoringSetV1Output = {
+  target: unknown;
+};
+
+export type FirmMonitoringSetInput = FirmMonitoringSetV1Input;
+export type FirmMonitoringSetOutput = FirmMonitoringSetV1Output;
+
 /** Re-researches one existing firm in this server process within the configured crawl bounds. Accepts only a firm id, never a URL. Returns at once; poll firm.get. */
 export type FirmRefreshV1Input = {
   firmId: string;
@@ -290,11 +314,13 @@ export type FirmRefreshV1Output = {
 export type FirmRefreshInput = FirmRefreshV1Input;
 export type FirmRefreshOutput = FirmRefreshV1Output;
 
-/** Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it. */
+/** Flag, dispute, correct, annotate, confirm or dismiss a research criterion, an investment event or a finding. Recorded as a separate review; the research record is not changed and nothing is approved by it. */
 export type FirmReviewV1Input = {
   firmId: string;
   criterionId?: string | null;
-  action: "flag" | "dispute" | "correct" | "note";
+  eventId?: string | null;
+  findingId?: string | null;
+  action: "flag" | "dispute" | "correct" | "note" | "confirm" | "dismiss";
   note: string;
   correctedValue?: string;
 };
@@ -304,6 +330,22 @@ export type FirmReviewV1Output = {
 
 export type FirmReviewInput = FirmReviewV1Input;
 export type FirmReviewOutput = FirmReviewV1Output;
+
+/** The firm's intelligence timeline: investment events, source discoveries and changes, proposed thesis changes, conflicts, failed research and reviews. Filter by type, time range and review state. */
+export type FirmTimelineV1Input = {
+  firmId: string;
+  types?: Array<string>;
+  from?: string;
+  to?: string;
+  reviewStates?: Array<string>;
+  limit?: number;
+};
+export type FirmTimelineV1Output = {
+  items: unknown;
+};
+
+export type FirmTimelineInput = FirmTimelineV1Input;
+export type FirmTimelineOutput = FirmTimelineV1Output;
 
 /** Asks Jev whether each current criterion's captured passage supports its statement. Reports skipped when Jev is not configured; never simulates a result. */
 export type FirmVerifyV1Input = {
@@ -587,6 +629,7 @@ export interface InvestContract extends AppContract {
   capabilities: {
     "appport.manifest": { input: AppportManifestInput; output: AppportManifestOutput; kind: "request"; version: 1 };
     "appport.ping": { input: AppportPingInput; output: AppportPingOutput; kind: "request"; version: 1 };
+    "attention.list": { input: AttentionListInput; output: AttentionListOutput; kind: "request"; version: 1 };
     "audit.list": { input: AuditListInput; output: AuditListOutput; kind: "request"; version: 1 };
     "decision.record": { input: DecisionRecordInput; output: DecisionRecordOutput; kind: "request"; version: 1 };
     "document.get": { input: DocumentGetInput; output: DocumentGetOutput; kind: "request"; version: 1 };
@@ -606,8 +649,10 @@ export interface InvestContract extends AppContract {
     "firm.approve": { input: FirmApproveInput; output: FirmApproveOutput; kind: "request"; version: 1 };
     "firm.get": { input: FirmGetInput; output: FirmGetOutput; kind: "request"; version: 1 };
     "firm.list": { input: FirmListInput; output: FirmListOutput; kind: "request"; version: 1 };
+    "firm.monitoring.set": { input: FirmMonitoringSetInput; output: FirmMonitoringSetOutput; kind: "request"; version: 1 };
     "firm.refresh": { input: FirmRefreshInput; output: FirmRefreshOutput; kind: "request"; version: 1 };
     "firm.review": { input: FirmReviewInput; output: FirmReviewOutput; kind: "request"; version: 1 };
+    "firm.timeline": { input: FirmTimelineInput; output: FirmTimelineOutput; kind: "request"; version: 1 };
     "firm.verify": { input: FirmVerifyInput; output: FirmVerifyOutput; kind: "request"; version: 1 };
     "review.record": { input: ReviewRecordInput; output: ReviewRecordOutput; kind: "request"; version: 1 };
     "review.request": { input: ReviewRequestInput; output: ReviewRequestOutput; kind: "request"; version: 1 };
@@ -636,6 +681,7 @@ export interface InvestContract extends AppContract {
 export const capabilityVersions: Record<string, number> = {
   "appport.manifest": 1,
   "appport.ping": 1,
+  "attention.list": 1,
   "audit.list": 1,
   "decision.record": 1,
   "document.get": 1,
@@ -655,8 +701,10 @@ export const capabilityVersions: Record<string, number> = {
   "firm.approve": 1,
   "firm.get": 1,
   "firm.list": 1,
+  "firm.monitoring.set": 1,
   "firm.refresh": 1,
   "firm.review": 1,
+  "firm.timeline": 1,
   "firm.verify": 1,
   "review.record": 1,
   "review.request": 1,
@@ -900,6 +948,66 @@ export const manifest = {
             ]
           },
           "authorization": [],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "attention.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "What needs a person across the workspace: new investment activity, proposed strategy changes, findings awaiting review, and research that is failing or stale. Each item appears once.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "What needs a person across the workspace: new investment activity, proposed strategy changes, findings awaiting review, and research that is failing or stale. Each item appears once.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
           "idempotency": "unsupported",
           "concurrency": {
             "mode": "parallel"
@@ -2661,6 +2769,106 @@ export const manifest = {
       ]
     },
     {
+      "name": "firm.monitoring.set",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Pause or resume continuous monitoring of a firm, or change its interval or crawl bounds. Pausing keeps the profile and all history.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "intervalMinutes": {
+            "type": "integer"
+          },
+          "maxPages": {
+            "type": "integer"
+          },
+          "maxDepth": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "target": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "target"
+        ]
+      },
+      "authorization": [
+        "research.run"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "firmId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Pause or resume continuous monitoring of a firm, or change its interval or crawl bounds. Pausing keeps the profile and all history.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "intervalMinutes": {
+                "type": "integer"
+              },
+              "maxPages": {
+                "type": "integer"
+              },
+              "maxDepth": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "target": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "target"
+            ]
+          },
+          "authorization": [
+            "research.run"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "firmId"
+          }
+        }
+      ]
+    },
+    {
       "name": "firm.refresh",
       "versions": [
         1
@@ -2746,7 +2954,7 @@ export const manifest = {
         1
       ],
       "latestVersion": 1,
-      "description": "Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it.",
+      "description": "Flag, dispute, correct, annotate, confirm or dismiss a research criterion, an investment event or a finding. Recorded as a separate review; the research record is not changed and nothing is approved by it.",
       "kind": "request",
       "inputSchema": {
         "type": "object",
@@ -2764,13 +2972,35 @@ export const manifest = {
               }
             ]
           },
+          "eventId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findingId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "action": {
             "type": "string",
             "enum": [
               "flag",
               "dispute",
               "correct",
-              "note"
+              "note",
+              "confirm",
+              "dismiss"
             ]
           },
           "note": {
@@ -2807,7 +3037,7 @@ export const manifest = {
       "definitions": [
         {
           "version": 1,
-          "description": "Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it.",
+          "description": "Flag, dispute, correct, annotate, confirm or dismiss a research criterion, an investment event or a finding. Recorded as a separate review; the research record is not changed and nothing is approved by it.",
           "kind": "request",
           "inputSchema": {
             "type": "object",
@@ -2825,13 +3055,35 @@ export const manifest = {
                   }
                 ]
               },
+              "eventId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "findingId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "action": {
                 "type": "string",
                 "enum": [
                   "flag",
                   "dispute",
                   "correct",
-                  "note"
+                  "note",
+                  "confirm",
+                  "dismiss"
                 ]
               },
               "note": {
@@ -2860,6 +3112,126 @@ export const manifest = {
           },
           "authorization": [
             "review.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "firm.timeline",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The firm's intelligence timeline: investment events, source discoveries and changes, proposed thesis changes, conflicts, failed research and reviews. Filter by type, time range and review state.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "reviewStates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The firm's intelligence timeline: investment events, source discoveries and changes, proposed thesis changes, conflicts, failed research and reviews. Filter by type, time range and review state.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "types": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "reviewStates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 8
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
           ],
           "idempotency": "unsupported",
           "concurrency": {

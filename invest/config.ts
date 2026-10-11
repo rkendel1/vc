@@ -20,7 +20,8 @@ export type InvestConfig = {
 	jev: { endpoint: string | null; apiKey: string | null; provider: string | null; model: string | null; timeoutMs: number };
 	documents: { storageDir: string; linkSecret: string; maxBytes: number; allowedTypes: string[]; maxPages: number; parseTimeoutMs: number };
 	evaluation: { timeoutMs: number; maxRetries: number };
-	research: { maxPages: number; maxDepth: number; timeoutMs: number; retries: number; perDomainDelayMs: number; maxBytes: number; maxRedirects: number; userAgent: string; staleAfterDays: number };
+	research: { maxPages: number; maxDepth: number; timeoutMs: number; retries: number; perDomainDelayMs: number; maxBytes: number; maxRedirects: number; userAgent: string; staleAfterDays: number; staleSourceDays: number; announcementLookbackDays: number };
+	monitoring: { enabled: boolean; intervalMinutes: number; maxConcurrentFirms: number; leaseMinutes: number; retryBaseMinutes: number };
 };
 
 export class ConfigError extends Error {}
@@ -31,6 +32,14 @@ function int(env: NodeJS.ProcessEnv, name: string, fallback: number, min: number
 	const n = Number(raw);
 	if (!Number.isInteger(n) || n < min || n > max) throw new ConfigError(`${name} must be an integer between ${min} and ${max}`);
 	return n;
+}
+
+function bool(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
+	const raw = env[name]?.trim().toLowerCase();
+	if (!raw) return fallback;
+	if (["1", "true", "yes", "on"].includes(raw)) return true;
+	if (["0", "false", "no", "off"].includes(raw)) return false;
+	throw new ConfigError(`${name} must be 1/0 or true/false`);
 }
 
 function str(env: NodeJS.ProcessEnv, name: string): string | null {
@@ -121,8 +130,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 			maxRedirects: int(env, "RESEARCH_MAX_REDIRECTS", 3, 0, 5),
 			userAgent: `AttnInvestResearchBot/1.0${str(env, "RESEARCH_CONTACT") ? ` (+${str(env, "RESEARCH_CONTACT")})` : ""}`,
 			staleAfterDays: int(env, "RESEARCH_STALE_AFTER_DAYS", 180, 1, 3650),
+			staleSourceDays: int(env, "RESEARCH_STALE_SOURCE_DAYS", 14, 1, 365),
+			announcementLookbackDays: int(env, "RESEARCH_ANNOUNCEMENT_LOOKBACK_DAYS", 730, 30, 3650),
+		},
+		monitoring: {
+			enabled: bool(env, "MONITORING_ENABLED", false),
+			intervalMinutes: int(env, "MONITORING_INTERVAL_MINUTES", 1440, 15, 43_200),
+			maxConcurrentFirms: int(env, "MONITORING_MAX_CONCURRENT_FIRMS", 2, 1, 8),
+			leaseMinutes: int(env, "MONITORING_LEASE_MINUTES", 15, 5, 120),
+			retryBaseMinutes: int(env, "MONITORING_RETRY_BASE_MINUTES", 30, 5, 720),
 		},
 	};
+	// A lease must outlive a worst-case single request, or a healthy run could be taken over mid-flight.
+	if (config.monitoring.enabled && config.monitoring.leaseMinutes * 60_000 < 2 * config.research.timeoutMs * (config.research.retries + 1))
+		throw new ConfigError("MONITORING_LEASE_MINUTES is too short for RESEARCH_TIMEOUT_MS and RESEARCH_RETRIES");
+	if (config.monitoring.enabled && config.monitoring.retryBaseMinutes > config.monitoring.intervalMinutes) warnings.push("MONITORING_RETRY_BASE_MINUTES exceeds MONITORING_INTERVAL_MINUTES; retries are capped at the interval");
 	return { config, warnings };
 }
 
@@ -139,5 +161,6 @@ export function describeConfig(config: InvestConfig): Record<string, unknown> {
 		documents: { maxBytes: config.documents.maxBytes, allowedTypes: config.documents.allowedTypes, maxPages: config.documents.maxPages },
 		evaluation: config.evaluation,
 		research: { ...config.research },
+		monitoring: config.monitoring,
 	};
 }

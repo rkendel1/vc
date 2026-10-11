@@ -1,6 +1,7 @@
 import type { ResearchLimits, ResearchStatus } from "../domain/research.ts";
 import type { Actor } from "../domain/types.ts";
 import type { InvestorResearchModule, VerifySummary } from "../modules/investor-research.ts";
+import type { MonitoringModule } from "../modules/monitoring.ts";
 import { type FirmInput, type ParseResult, type PreparedFirm, prepareInputs } from "./input.ts";
 
 export type PipelineOptions = {
@@ -10,6 +11,8 @@ export type PipelineOptions = {
 	/** Skip firms whose last completed research is newer than this many days (and not incomplete). */
 	skipFreshDays?: number;
 	concurrency: number;
+	/** Register each firm as a persistent monitoring target before its initial research. */
+	monitor?: { module: MonitoringModule; intervalMinutes?: number };
 	now?: () => Date;
 };
 
@@ -18,6 +21,7 @@ export type FirmReport = {
 	name: string | null;
 	inputLines: number[];
 	reconcile: "created" | "updated" | "unchanged" | "would_create" | "would_update" | "would_leave";
+	monitoring: "registered" | "already_registered" | "would_register" | "not_requested";
 	status: ResearchStatus | "skipped" | "not_run" | "error";
 	runId: string | null;
 	pagesRead: number | null;
@@ -48,19 +52,22 @@ export async function runPipeline(research: InvestorResearchModule, actor: Actor
 	const now = options.now ?? (() => new Date());
 
 	const work = async (p: PreparedFirm, index: number) => {
-		const report: FirmReport = { domain: p.canonicalDomain, name: p.name ?? null, inputLines: p.lines, reconcile: "unchanged", status: "not_run", runId: null, pagesRead: null, pagesAttempted: null, criteria: null, reasons: [], verification: null, error: null };
+		const report: FirmReport = { domain: p.canonicalDomain, name: p.name ?? null, inputLines: p.lines, reconcile: "unchanged", monitoring: "not_requested", status: "not_run", runId: null, pagesRead: null, pagesAttempted: null, criteria: null, reasons: [], verification: null, error: null };
 		reports[index] = report;
 		try {
 			if (options.dryRun) {
 				const existing = await research.lookup(actor, p.canonicalDomain);
 				report.reconcile = !existing ? "would_create" : "would_leave";
 				report.name = existing?.name ?? p.name ?? p.canonicalDomain;
+				if (options.monitor) report.monitoring = existing && (await options.monitor.module.get(actor, existing.id)) ? "already_registered" : "would_register";
 				if (existing) report.status = existing.researchStatus === "pending" ? "not_run" : existing.researchStatus;
 				return;
 			}
 			const { firm, action } = await research.reconcile(actor, p);
 			report.reconcile = action;
 			report.name = firm.name;
+			// The firm is a persistent monitoring target from here on, whatever the initial crawl does.
+			if (options.monitor) report.monitoring = (await options.monitor.module.register(actor, firm, { intervalMinutes: options.monitor.intervalMinutes })).created ? "registered" : "already_registered";
 			if (options.skipFreshDays && firm.lastResearchedAt && firm.researchStatus !== "research_incomplete" && firm.researchStatus !== "pending") {
 				const ageDays = (now().getTime() - Date.parse(firm.lastResearchedAt)) / 86_400_000;
 				if (ageDays < options.skipFreshDays) {
@@ -113,7 +120,7 @@ export function formatReport(report: PipelineReport): string {
 	lines.push("");
 	for (const f of report.firms) {
 		lines.push(`${f.domain}${f.name && f.name !== f.domain ? ` (${f.name})` : ""}`);
-		lines.push(`  firm: ${f.reconcile}; research: ${f.status}${f.runId ? `; run ${f.runId}` : ""}`);
+		lines.push(`  firm: ${f.reconcile}; research: ${f.status}${f.runId ? `; run ${f.runId}` : ""}${f.monitoring !== "not_requested" ? `; monitoring: ${f.monitoring}` : ""}`);
 		if (f.pagesAttempted !== null) lines.push(`  pages read: ${f.pagesRead}/${f.pagesAttempted}`);
 		if (f.criteria) lines.push(`  criteria: ${f.criteria.explicit} explicit, ${f.criteria.observed} observed, ${f.criteria.inferred} inferred`);
 		if (f.verification) lines.push(f.verification.skipped ? "  verification: pending (Jev not configured)" : `  verification: ${f.verification.supported} supported, ${f.verification.notSupported} not supported, ${f.verification.inconclusive} inconclusive, ${f.verification.errors} errors`);

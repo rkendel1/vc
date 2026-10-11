@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ALL_PERMISSIONS, type Actor } from "../domain/types.ts";
 import { DocumentStorage } from "../ingestion/document-storage.ts";
 import { JEV_ADAPTER_VERSION, JEV_CONTRACT, JevError, type JevDecider, type JevDecisionRequest, type JevDecisionResponse, type JevIdentity, validateChoiceResponse } from "../jev/jev-client.ts";
+import type { MonitoringOptions } from "../modules/monitoring.ts";
 import type { ResearchDeps } from "../modules/investor-research.ts";
 import { silentLogger } from "../logger.ts";
 import { InvestmentService } from "../service.ts";
@@ -67,7 +68,7 @@ export type Harness = {
 	close(): Promise<void>;
 };
 
-export async function createHarness(options: { jev?: JevDecider; maxRetries?: number; timeoutMs?: number; jevTimeoutMs?: number; fetcherFor?: ResearchDeps["fetcherFor"]; staleAfterDays?: number; clock?: () => Date } = {}): Promise<Harness> {
+export async function createHarness(options: { jev?: JevDecider; maxRetries?: number; timeoutMs?: number; jevTimeoutMs?: number; fetcherFor?: ResearchDeps["fetcherFor"]; staleAfterDays?: number; staleSourceDays?: number; lookbackDays?: number; monitoring?: Partial<MonitoringOptions>; clock?: () => Date } = {}): Promise<Harness> {
 	const dir = await mkdtemp(join(tmpdir(), "invest-test-"));
 	const store = await InvestStore.openDir(join(dir, "felt"), options.clock);
 	const storage = new DocumentStorage(join(dir, "docs"), "test-link-secret-0123456789");
@@ -82,8 +83,11 @@ export async function createHarness(options: { jev?: JevDecider; maxRetries?: nu
 			fetcherFor: options.fetcherFor ?? (() => ({ fetchPage: async () => { throw new Error("no research fetcher configured in this test"); } })),
 			defaults: TEST_RESEARCH_LIMITS,
 			staleAfterDays: options.staleAfterDays ?? 180,
+			staleSourceDays: options.staleSourceDays ?? 14,
+			lookbackDays: options.lookbackDays ?? 730,
 			jevTimeoutMs: 5_000,
 		},
+		monitoring: { defaultIntervalMinutes: 1440, maxConcurrentFirms: 2, leaseMs: 15 * 60_000, retryBaseMs: 30 * 60_000, ceilings: { maxPages: 50, maxDepth: 4 }, random: () => 0.5, ...(options.monitoring ?? {}) },
 	});
 	return {
 		service,

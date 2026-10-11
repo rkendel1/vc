@@ -3,6 +3,7 @@ import { createInvestAppPortServer } from "./appport/server.ts";
 import { RegistryAuthority, developmentRegistry, loadRegistry } from "./auth/authboundry-adapter.ts";
 import { type InvestConfig, describeConfig } from "./config.ts";
 import type { ResearchLimits } from "./domain/research.ts";
+import { MonitoringRunner, type MonitoringOptions } from "./modules/monitoring.ts";
 import type { ResearchDeps } from "./modules/investor-research.ts";
 import { DocumentStorage } from "./ingestion/document-storage.ts";
 import { JevHttpClient, UnconfiguredJev, type JevDecider } from "./jev/jev-client.ts";
@@ -18,6 +19,11 @@ export function researchLimits(config: InvestConfig): ResearchLimits {
 	return { maxPages: r.maxPages, maxDepth: r.maxDepth, timeoutMs: r.timeoutMs, retries: r.retries, perDomainDelayMs: r.perDomainDelayMs, maxBytes: r.maxBytes, maxRedirects: r.maxRedirects };
 }
 
+export function monitoringOptions(config: InvestConfig): MonitoringOptions {
+	const m = config.monitoring;
+	return { defaultIntervalMinutes: m.intervalMinutes, maxConcurrentFirms: m.maxConcurrentFirms, leaseMs: m.leaseMinutes * 60_000, retryBaseMs: m.retryBaseMinutes * 60_000, ceilings: { maxPages: 50, maxDepth: 4 } };
+}
+
 export function defaultFetcherFactory(config: InvestConfig): ResearchFetcherFactory {
 	return (scopeDomain, limits) => new SafeHttpFetcher({ scopeDomain, limits, userAgent: config.research.userAgent, robotsToken: "AttnInvestResearchBot" });
 }
@@ -28,6 +34,7 @@ export type InvestRuntime = {
 	storage: DocumentStorage;
 	service: InvestmentService;
 	authority: RegistryAuthority;
+	monitoringRunner: MonitoringRunner | null;
 	appport: AppPortServer;
 	close(): Promise<void>;
 };
@@ -52,8 +59,11 @@ export async function bootstrap(config: InvestConfig, logger: Logger, overrides:
 			fetcherFor: overrides.fetcherFor ?? defaultFetcherFactory(config),
 			defaults: researchLimits(config),
 			staleAfterDays: config.research.staleAfterDays,
+			staleSourceDays: config.research.staleSourceDays,
+			lookbackDays: config.research.announcementLookbackDays,
 			jevTimeoutMs: config.jev.timeoutMs,
 		},
+		monitoring: monitoringOptions(config),
 	});
 	let registry;
 	if (config.authConfigPath) registry = await loadRegistry(config.authConfigPath);
@@ -65,8 +75,10 @@ export async function bootstrap(config: InvestConfig, logger: Logger, overrides:
 	const authority = new RegistryAuthority(registry);
 	const recovered = await service.evaluations.recoverInterrupted(authority.workspaceIds);
 	if (recovered) logger.warn("Marked evaluations interrupted by the last shutdown as failed", { recovered });
-	const interruptedRuns = await service.research.recoverInterrupted(authority.workspaceIds);
-	if (interruptedRuns) logger.warn("Marked research runs interrupted by the last shutdown as failed", { interruptedRuns });
+	const recovered2 = await service.monitoring.recoverOnStartup(authority.workspaceIds);
+	if (recovered2.runs || recovered2.leases) logger.warn("Recovered research interrupted by the last shutdown", recovered2);
+	const runner = config.monitoring.enabled ? new MonitoringRunner(service.monitoring, () => authority.workspaceIds, logger) : null;
+	runner?.start();
 	const appport = createInvestAppPortServer({ service, authority, maxUploadBytes: config.documents.maxBytes });
 	logger.info("Attn Invest configured", describeConfig(config));
 	return {
@@ -75,8 +87,10 @@ export async function bootstrap(config: InvestConfig, logger: Logger, overrides:
 		storage,
 		service,
 		authority,
+		monitoringRunner: runner,
 		appport,
 		async close() {
+			await runner?.stop();
 			await service.evaluations.settled();
 			await service.research.settled();
 			await appport.close();

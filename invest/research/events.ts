@@ -15,7 +15,9 @@ import { sentences } from "./html.ts";
 export const NEW_WINDOW_DAYS = 30;
 
 const STAGE = "(?:pre[- ]?seed|seed|series [a-e]\\+?|follow[- ]on|bridge)";
-const MONEY = "\\$\\s?(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s?(k|thousand|mm|m|million|bn|b|billion)?";
+/** Same words, either case, for the company patterns (which must stay case-sensitive for the name itself). */
+const STAGE_ANYCASE = "(?:[Pp]re[- ]?[Ss]eed|[Ss]eed|[Ss]eries [A-Ea-e]\\+?|[Ff]ollow[- ]on|[Bb]ridge)";
+const MONEY = "\\$\\s?(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s?([kK]|[tT]housand|MM|mm|[mM]|[mM]illion|[bB]n|[bB]|[bB]illion)?";
 const NAME = "([A-Z][A-Za-z0-9&.'’-]*(?:\\s+(?:[A-Z][A-Za-z0-9&.'’-]*|of|the|&|and)){0,3})";
 const INVOLVEMENT = /\b(?:led|co-led|co-leads|leads|participat\w+|joined|invest(?:ed|s|ing)? in|backed|backs|our investment|partner(?:ed|s)? with|alongside|proud to (?:back|support)|excited to (?:back|announce))\b/i;
 const ACQUISITION = /\b(?:acquir(?:e|ed|es|ing)|acquisition of)\b/i;
@@ -85,9 +87,9 @@ export type EventCandidate = {
 
 function findCompany(sentence: string, firmName: string): string | null {
 	const patterns: RegExp[] = [
-		new RegExp(`${NAME}['’]s\\s+(?:${MONEY}\\s+)?${STAGE}\\b`),
+		new RegExp(`${NAME}['’]s\\s+(?:${MONEY}\\s+)?${STAGE_ANYCASE}\\b`),
 		new RegExp(`^(?:\\w+\\s+){0,2}?${NAME}\\s+(?:raises|raised|announces|announced|closes|closed|secures|secured|lands|landed|completes|completed|unveils|launches)\\b`),
-		new RegExp(`\\b(?:led|co-led|co-leads|leads|participat\\w+ in|joined|invest(?:ed|s)? in|backed|backs|our investment in|investment in|partner(?:ed|s)? with|support(?:ed|s)?)\\s+(?:the\\s+)?(?:${MONEY}\\s+)?(?:${STAGE}\\s+)?(?:round|financing|investment)?\\s*(?:of|in|for|into)?\\s*${NAME}`),
+		new RegExp(`\\b(?:led|co-led|co-leads|leads|participat\\w+ in|joined|invest(?:ed|s)? in|backed|backs|our investment in|investment in|partner(?:ed|s)? with|support(?:ed|s)?)\\s+(?:the\\s+)?(?:${MONEY}\\s+)?(?:${STAGE_ANYCASE}\\s+)?(?:round|financing|investment)?\\s*(?:of|in|for|into)?\\s*${NAME}`),
 		new RegExp(`\\b(?:acquir(?:ed|es)|acquisition of)\\s+${NAME}`),
 		new RegExp(`\\bround (?:of|in|for) ${NAME}`),
 	];

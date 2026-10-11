@@ -98,7 +98,7 @@ describe("firm capabilities over AppPort", () => {
 			return m;
 		})();
 		const firmCaps = (manifest.capabilities as unknown as { name: string; inputSchema: unknown }[]).filter((c) => c.name.startsWith("firm."));
-		expect(firmCaps.map((c) => c.name).sort()).toEqual(["firm.approval.withdraw", "firm.approve", "firm.get", "firm.list", "firm.refresh", "firm.review", "firm.verify"]);
+		expect(firmCaps.map((c) => c.name).sort()).toEqual(["firm.approval.withdraw", "firm.approve", "firm.get", "firm.list", "firm.monitoring.set", "firm.refresh", "firm.review", "firm.timeline", "firm.verify"]);
 		for (const c of firmCaps) expect(JSON.stringify(c.inputSchema)).not.toMatch(/workspaceId|tenantId|"url"/);
 		expect(await code(call(TOKENS.aAnalyst, "firm.review", { firmId, action: "note", note: "" }))).toBe("INVALID_INPUT");
 		expect(await code(call(TOKENS.aAnalyst, "firm.review", { firmId, action: "bogus", note: "x" }))).toBe("INVALID_INPUT");

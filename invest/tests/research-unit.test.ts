@@ -265,8 +265,8 @@ describe("conflicts", () => {
 });
 
 describe("coverage assessment", () => {
-	const ok = (url: string, kind = "other", text = "x".repeat(400)) => ({ requestedUrl: url, depth: 1, kind: kind as never, restricted: false, parsed: { title: null, blocks: [text], links: [], metaRobots: [] }, fetch: { outcome: "ok" as const, requestedUrl: url, finalUrl: url, httpStatus: 200, contentType: "text/html", body: "", attempts: 1, detail: null, robotsHeader: null } });
-	const bad = (url: string, kind: string, outcome: string) => ({ ...ok(url, kind), parsed: null, fetch: { ...ok(url).fetch, outcome: outcome as never } });
+	const ok = (url: string, kind = "other", text = "x".repeat(400)) => ({ requestedUrl: url, depth: 1, kind: kind as never, restricted: false, parsed: { title: null, blocks: [text], links: [], metaRobots: [], publishedAt: null, feedLinks: [] }, feed: null, fetch: { outcome: "ok" as const, requestedUrl: url, finalUrl: url, httpStatus: 200, contentType: "text/html", body: "", attempts: 1, detail: null, robotsHeader: null } });
+	const bad = (url: string, kind: string, outcome: string) => ({ ...ok(url, kind), parsed: null, feed: null, fetch: { ...ok(url).fetch, outcome: outcome as never } });
 	const crawl = (pages: CrawlResult["pages"], unvisitedRelevant: CrawlResult["unvisitedRelevant"] = []): CrawlResult => ({ pages, unvisitedRelevant });
 	it("distinguishes found, not found, and incomplete", () => {
 		expect(assessCoverage(crawl([ok("https://a.vc/", "home"), ok("https://a.vc/thesis", "thesis")]), { explicit: 0, observedOrInferred: 0 }).status).toBe("no_thesis_found");

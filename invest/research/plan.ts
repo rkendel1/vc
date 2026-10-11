@@ -1,6 +1,7 @@
 import { sha256Hex } from "../domain/canonical.ts";
 import type {
 	EventEvidence,
+	EventType,
 	FirmApproval,
 	InvestmentEvent,
 	ResearchCriterion,
@@ -253,16 +254,16 @@ export function planRun(i: PlanInput): RunPlan {
 	const corroborations: RunPlan["corroborations"] = [];
 	const known = [...i.existingEvents];
 	const seenEvidence = new Set(i.existingEvidenceIds);
-	const addEvidence = (eventId: string, evidenceId: string, c: { sourceId: string; url: string; passage: string; passageHash: string; publishedAt: string | null }) => {
+	const addEvidence = (eventId: string, evidenceId: string, c: { sourceId: string; url: string; passage: string; passageHash: string; publishedAt: string | null; announcedAt: string | null; type: EventType; round: string | null; roundAmountUsd: number | null; firmAmountUsd: number | null }) => {
 		seenEvidence.add(evidenceId);
-		evidence.push({ id: evidenceId, workspaceId, firmId: firm.id, eventId, sourceId: c.sourceId, url: c.url, passage: c.passage, passageHash: c.passageHash, publishedAt: c.publishedAt, runId: i.runId, discoveredAt: now });
+		evidence.push({ id: evidenceId, workspaceId, firmId: firm.id, eventId, sourceId: c.sourceId, url: c.url, passage: c.passage, passageHash: c.passageHash, publishedAt: c.publishedAt, announcedAt: c.announcedAt, type: c.type, round: c.round, roundAmountUsd: c.roundAmountUsd, firmAmountUsd: c.firmAmountUsd, runId: i.runId, discoveredAt: now });
 	};
 	const handle = (cand: EventCandidate, sourceId: string, url: string, forceType?: "portfolio_addition") => {
 		const evidenceId = `evd_${sha256Hex([firm.id, sourceId, cand.passageHash, cand.companyKey].join("|")).slice(0, 32)}`;
 		if (seenEvidence.has(evidenceId)) return;
 		const match = matchEvent(cand, known);
 		if (match.kind === "same") {
-			addEvidence(match.event.id, evidenceId, { sourceId, url, passage: cand.passage, passageHash: cand.passageHash, publishedAt: cand.publishedAt });
+			addEvidence(match.event.id, evidenceId, { sourceId, url, passage: cand.passage, passageHash: cand.passageHash, publishedAt: cand.publishedAt, announcedAt: cand.announcedAt, type: cand.type, round: cand.round, roundAmountUsd: cand.roundAmountUsd, firmAmountUsd: cand.firmAmountUsd });
 			corroborations.push({ eventId: match.event.id, evidenceId });
 			return;
 		}
@@ -293,7 +294,7 @@ export function planRun(i: PlanInput): RunPlan {
 		};
 		events.push(event);
 		known.push(event);
-		addEvidence(event.id, evidenceId, { sourceId, url, passage: cand.passage, passageHash: cand.passageHash, publishedAt: cand.publishedAt });
+		addEvidence(event.id, evidenceId, { sourceId, url, passage: cand.passage, passageHash: cand.passageHash, publishedAt: cand.publishedAt, announcedAt: cand.announcedAt, type: cand.type, round: cand.round, roundAmountUsd: cand.roundAmountUsd, firmAmountUsd: cand.firmAmountUsd });
 	};
 	for (const { cand, sourceId, url } of eventCands) handle(cand, sourceId, url);
 	for (const p of portfolioAdds) {

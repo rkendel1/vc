@@ -9,16 +9,10 @@
  * See docs/invest/VC2_RESEARCH_PIPELINE.md.
  */
 import { readFile, writeFile } from "node:fs/promises";
-import { loadConfig } from "../config.ts";
 import type { ResearchLimits } from "../domain/research.ts";
-import type { Actor } from "../domain/types.ts";
-import { JevHttpClient, UnconfiguredJev } from "../jev/jev-client.ts";
-import { loadRegistry } from "../auth/authboundry-adapter.ts";
-import { InvestorResearchModule } from "../modules/investor-research.ts";
-import { SafeHttpFetcher } from "../research/fetcher.ts";
 import { parseInput } from "../research/input.ts";
 import { formatReport, runPipeline } from "../research/pipeline.ts";
-import { InvestStore } from "../store/store.ts";
+import { openStack } from "./stack.ts";
 
 const USAGE = `Usage: bun run research -- <input.csv|json|txt> --workspace <id> [options]
 
@@ -31,6 +25,8 @@ const USAGE = `Usage: bun run research -- <input.csv|json|txt> --workspace <id> 
   --delay-ms <n>          Minimum gap between requests to one host (default 1500, floor 250)
   --skip-fresh-days <n>   Skip firms researched successfully within n days
   --concurrency <n>       Firms in parallel, 1-8 (default 1; each host is still rate limited)
+  --no-monitor            Do not register firms as persistent monitoring targets (default: register)
+  --interval-minutes <n>  Monitoring interval for newly registered firms (default MONITORING_INTERVAL_MINUTES=1440)
   --no-verify             Do not ask Jev to verify passages (verification stays pending)
   --json <path>           Also write the report as JSON
   -h, --help
@@ -41,10 +37,10 @@ function fail(message: string): never {
 	process.exit(2);
 }
 
-type Args = { file: string; workspace: string; dryRun: boolean; limits: Partial<ResearchLimits>; skipFreshDays?: number; concurrency: number; verify: boolean; json?: string };
+type Args = { file: string; workspace: string; dryRun: boolean; limits: Partial<ResearchLimits>; skipFreshDays?: number; concurrency: number; verify: boolean; monitor: boolean; intervalMinutes?: number; json?: string };
 
 function parseArgs(argv: string[]): Args {
-	const args: Args = { file: "", workspace: "", dryRun: false, limits: {}, concurrency: 1, verify: true };
+	const args: Args = { file: "", workspace: "", dryRun: false, limits: {}, concurrency: 1, verify: true, monitor: true };
 	const num = (name: string, value: string | undefined, min: number, max: number) => {
 		const n = Number(value);
 		if (!Number.isInteger(n) || n < min || n > max) fail(`${name} must be an integer between ${min} and ${max}`);
@@ -64,6 +60,12 @@ function parseArgs(argv: string[]): Args {
 				break;
 			case "--dry-run":
 				args.dryRun = true;
+				break;
+			case "--no-monitor":
+				args.monitor = false;
+				break;
+			case "--interval-minutes":
+				args.intervalMinutes = num(a, next(), 15, 43_200);
 				break;
 			case "--no-verify":
 				args.verify = false;
@@ -104,38 +106,20 @@ function parseArgs(argv: string[]): Args {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const { config, warnings } = loadConfig();
-for (const w of warnings.filter((w) => !/Jev is not configured|DOCUMENT_STORAGE/.test(w))) console.error(`warning: ${w}`);
-
-// The workspace must exist in the identity registry when one is configured; the CLI never invents workspaces.
-if (config.authConfigPath) {
-	const registry = await loadRegistry(config.authConfigPath);
-	if (!registry.workspaces.some((w) => w.id === args.workspace)) fail(`Workspace "${args.workspace}" is not in ${config.authConfigPath}`);
-} else if (config.appEnv === "production") fail("AUTHBOUNDRY_CONFIG_PATH is required in production");
-else if (args.workspace !== "ws-dev") console.error(`warning: no AUTHBOUNDRY_CONFIG_PATH; the development registry only knows workspace "ws-dev"`);
+const stack = await openStack({ workspace: args.workspace, fail });
+const { config } = stack;
 
 const text = await readFile(args.file, "utf8").catch((e: Error) => fail(`Cannot read ${args.file}: ${e.message}`));
 const parsed = parseInput(text, args.file);
 if (!parsed.inputs.length && !parsed.errors.length) fail("The input file contains no firms");
 
-const store = await InvestStore.openDir(config.feltdbDir);
 try {
-	const jev = config.jev.endpoint ? new JevHttpClient({ endpoint: config.jev.endpoint, apiKey: config.jev.apiKey, provider: config.jev.provider, model: config.jev.model, timeoutMs: config.jev.timeoutMs }) : new UnconfiguredJev();
-	const r = config.research;
-	const research = new InvestorResearchModule({
-		store,
-		jev,
-		fetcherFor: (scopeDomain, limits) => new SafeHttpFetcher({ scopeDomain, limits, userAgent: r.userAgent, robotsToken: "AttnInvestResearchBot" }),
-		defaults: { maxPages: r.maxPages, maxDepth: r.maxDepth, timeoutMs: r.timeoutMs, retries: r.retries, perDomainDelayMs: r.perDomainDelayMs, maxBytes: r.maxBytes, maxRedirects: r.maxRedirects },
-		staleAfterDays: r.staleAfterDays,
-		jevTimeoutMs: config.jev.timeoutMs,
-	});
-	const actor: Actor = { principalId: "research-cli", displayName: "Research CLI", workspaceId: args.workspace, permissions: ["invest.read", "research.run"] };
-	const report = await runPipeline(research, actor, parsed.inputs, parsed.errors, { dryRun: args.dryRun, limits: args.limits, verify: args.verify, skipFreshDays: args.skipFreshDays, concurrency: args.concurrency });
+	const { research, monitoring, actor } = stack;
+	const report = await runPipeline(research, actor, parsed.inputs, parsed.errors, { dryRun: args.dryRun, limits: args.limits, verify: args.verify, skipFreshDays: args.skipFreshDays, concurrency: args.concurrency, monitor: args.monitor ? { module: monitoring, intervalMinutes: args.intervalMinutes } : undefined });
 	console.log(formatReport(report));
 	if (args.json) await writeFile(args.json, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
 	// Exit 1 if any firm hit a processing error (retryable by re-running the same command); research_incomplete is a result, not an error.
 	process.exitCode = report.firms.some((f) => f.status === "error") ? 1 : 0;
 } finally {
-	await store.close();
+	await stack.close();
 }

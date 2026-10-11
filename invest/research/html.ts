@@ -65,7 +65,7 @@ export function parseHtml(html: string, baseUrl: string): ParsedPage {
 		/"datePublished"\s*:\s*"([^"]+)"/i.exec(source)?.[1];
 	const stripped = source
 		.replace(/<!--[\s\S]*?-->/g, " ")
-		.replace(/<(script|style|noscript|template|svg|iframe|object|embed|head)\b[\s\S]*?<\/\1\s*>/gi, " ")
+		.replace(/<(script|style|noscript|template|svg|iframe|object|embed|head|nav|footer|aside)\b[\s\S]*?<\/\1\s*>/gi, " ")
 		.replace(new RegExp(`</?(${BLOCK_TAGS})\\b[^>]*>`, "gi"), "\n")
 		.replace(/<[^>]+>/g, " ");
 	const blocks = decodeEntities(stripped)

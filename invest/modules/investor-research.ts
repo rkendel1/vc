@@ -5,6 +5,17 @@ import {
 	type CriterionField,
 	type CriterionView,
 	type CriterionVerification,
+	type EventEvidence,
+	type EventReviewState,
+	type InvestmentEvent,
+	type InvestmentEventView,
+	type MonitoringTarget,
+	type ResearchFinding,
+	type ResearchHealth,
+	type AttentionItem,
+	type SourceState,
+	type TimelineItem,
+	type VerificationStatus,
 	type FirmApproval,
 	type FirmListItem,
 	type FirmProfile,
@@ -26,14 +37,16 @@ import { assessCoverage } from "../research/assess.ts";
 import { sourceClassFor } from "../research/classify.ts";
 import { detectConflicts } from "../research/conflicts.ts";
 import { crawlFirm } from "../research/crawler.ts";
+import { type TimelineFilter, buildTimeline } from "../research/timeline.ts";
+import { planRun } from "../research/plan.ts";
 import { EXTRACTOR_VERSION, checkSizeValue, criterionId, extractFromPage } from "../research/extract.ts";
 import type { PageFetcher } from "../research/fetcher.ts";
 import type { FirmInput, PreparedFirm } from "../research/input.ts";
 import { normalizeFirmUrl } from "../research/url.ts";
-import { verifiable, verifyCriterion } from "../research/verification.ts";
+import { eventStatement, statementFor, verifiable, verifyStatement } from "../research/verification.ts";
 import { C, type InvestStore, type StoreWrite } from "../store/store.ts";
 
-export const PIPELINE_VERSION = "invest-research-pipeline/1.0.0";
+export const PIPELINE_VERSION = "invest-research-pipeline/1.1.0";
 
 export type ResearchDeps = {
 	store: InvestStore;
@@ -41,8 +54,16 @@ export type ResearchDeps = {
 	fetcherFor: (scopeDomain: string, limits: ResearchLimits) => PageFetcher;
 	defaults: ResearchLimits;
 	staleAfterDays: number;
+	/** A source not read successfully for this long is reported as stale research health. */
+	staleSourceDays: number;
+	/** Announcements whose date is older than this are out of scope and not recorded. */
+	lookbackDays: number;
 	jevTimeoutMs: number;
 };
+
+/** What a finished run means for scheduling. Delivered to the observer (the monitoring module) after every run, successful or not. */
+export type RunOutcome = { firmId: string; runId: string | null; at: string; success: boolean; retryable: boolean; message: string | null };
+export type RunObserver = (actor: Actor, outcome: RunOutcome) => Promise<void>;
 
 export type ReconcileResult = { firm: InvestorFirm; action: "created" | "updated" | "unchanged" };
 export type VerifySummary = { attempted: number; supported: number; notSupported: number; inconclusive: number; errors: number; skipped: "jev_not_configured" | null };
@@ -75,6 +96,22 @@ function cleanTitleToName(title: string | null, domain: string): string | null {
  */
 export class InvestorResearchModule {
 	private readonly inflight = new Map<string, Promise<unknown>>();
+	private observer: RunObserver | null = null;
+
+	/** One observer: the monitoring module records attempts and schedules the next check from every run, however it was started. */
+	setObserver(observer: RunObserver | null) {
+		this.observer = observer;
+	}
+
+	private async notify(actor: Actor, outcome: RunOutcome, override?: RunObserver | null) {
+		const observer = override === undefined ? this.observer : override;
+		if (!observer) return;
+		try {
+			await observer(actor, outcome);
+		} catch {
+			// Scheduling bookkeeping must never turn a recorded run into a failure.
+		}
+	}
 
 	constructor(private readonly deps: ResearchDeps) {}
 
@@ -115,6 +152,7 @@ export class InvestorResearchModule {
 					lastRunId: null,
 					lastRunStartedAt: null,
 					lastResearchedAt: null,
+					lastSuccessAt: null,
 					currentCriterionIds: [],
 					conflictCount: 0,
 					sourcesChecked: 0,
@@ -197,6 +235,9 @@ export class InvestorResearchModule {
 			extractorVersion: EXTRACTOR_VERSION,
 			limits: merged,
 			outcome: null,
+			success: false,
+			carriedCriterionIds: [],
+			baseline: false,
 			outcomeReasons: [],
 			checks: [],
 			criterionIds: [],
@@ -211,9 +252,9 @@ export class InvestorResearchModule {
 	}
 
 	/** Begin and execute a run, then verify new criteria when Jev is configured. */
-	async research(actor: Actor, firmId: string, options: { limits?: Partial<ResearchLimits>; verify?: boolean } = {}): Promise<{ firm: InvestorFirm; run: ResearchRun; verification: VerifySummary }> {
+	async research(actor: Actor, firmId: string, options: { limits?: Partial<ResearchLimits>; verify?: boolean; observer?: RunObserver | null } = {}): Promise<{ firm: InvestorFirm; run: ResearchRun; verification: VerifySummary }> {
 		const { run } = await this.beginRun(actor, firmId, options.limits);
-		return this.execute(actor, firmId, run, options.verify !== false);
+		return this.execute(actor, firmId, run, options.verify !== false, options.observer);
 	}
 
 	/** Starts a run in this process and returns at once; used by the web refresh. */
@@ -250,14 +291,23 @@ export class InvestorResearchModule {
 		return n;
 	}
 
-	private async execute(actor: Actor, firmId: string, started: ResearchRun, verify: boolean) {
+	private async execute(actor: Actor, firmId: string, started: ResearchRun, verify: boolean, observer?: RunObserver | null) {
+		let recorded: { firm: InvestorFirm; run: ResearchRun };
 		try {
-			const { firm, run } = await this.crawlAndRecord(actor, firmId, started);
+			recorded = await this.crawlAndRecord(actor, firmId, started);
+		} catch (error) {
+			await this.recordFailure(actor, firmId, started, error);
+			await this.notify(actor, { firmId, runId: started.id, at: this.store.now(), success: false, retryable: true, message: (error as Error)?.message?.slice(0, 300) ?? "research failed" }, observer);
+			throw error;
+		}
+		const { firm, run } = recorded;
+		await this.notify(actor, { firmId, runId: run.id, at: run.completedAt ?? this.store.now(), success: run.success, retryable: firm.retryable, message: run.success ? null : (run.outcomeReasons.find((r) => /could not be read|blocked|failed/.test(r)) ?? run.outcomeReasons[1] ?? "the homepage could not be read") }, observer);
+		try {
 			const verification = verify ? await this.verifyFirm(actor, firmId) : { attempted: 0, supported: 0, notSupported: 0, inconclusive: 0, errors: 0, skipped: null };
 			return { firm, run, verification };
 		} catch (error) {
-			await this.recordFailure(actor, firmId, started, error);
-			throw error;
+			// The run is recorded and scheduled; only the optional Jev step failed. Report it without losing the run.
+			return { firm, run, verification: { attempted: 0, supported: 0, notSupported: 0, inconclusive: 0, errors: 1, skipped: null } as VerifySummary };
 		}
 	}
 
@@ -266,125 +316,119 @@ export class InvestorResearchModule {
 		const limits = started.limits;
 		const fetcher = this.deps.fetcherFor(firm0.canonicalDomain, limits);
 		const crawl = await crawlFirm(fetcher, firm0.website, firm0.canonicalDomain, { maxPages: limits.maxPages, maxDepth: limits.maxDepth });
-		const now = this.store.now();
-
-		const sources: ResearchSource[] = [];
-		const criteria: ResearchCriterion[] = [];
-		const checks: SourceCheck[] = [];
-		let homeTitle: string | null = null;
-		for (const page of crawl.pages) {
-			const f = page.fetch;
-			const text = page.parsed && f.outcome === "ok" ? page.parsed.blocks.join("\n") : null;
-			const contentHash = text !== null && !page.restricted ? `sha256:${sha256Hex(text)}` : null;
-			const outcome = page.restricted ? "blocked_robots" : f.outcome;
-			let hostile = false;
-			let excerpts: string[] = [];
-			let extracted: ReturnType<typeof extractFromPage>["criteria"] = [];
-			const sourceClass = sourceClassFor(page.kind, f.finalUrl);
-			if (page.parsed && f.outcome === "ok" && !page.restricted) {
-				const ex = extractFromPage({ kind: page.kind, sourceClass, blocks: page.parsed.blocks, url: f.finalUrl });
-				hostile = ex.hostile;
-				extracted = ex.criteria;
-				excerpts = ex.relevantExcerpts.slice(0, 8);
-				if (page.depth === 0 && page.kind === "home") homeTitle = page.parsed.title;
-			}
-			const id = `src_${sha256Hex([firmId, page.requestedUrl, contentHash ?? `outcome:${outcome}`, EXTRACTOR_VERSION].join("|")).slice(0, 32)}`;
-			const detail = page.restricted ? "The page's robots directives (noindex/noarchive/nosnippet) ask not to be indexed or quoted; it was not stored or used." : f.detail;
-			sources.push({
-				id,
-				workspaceId: actor.workspaceId,
-				firmId,
-				requestedUrl: page.requestedUrl,
-				finalUrl: f.finalUrl,
-				sourceClass,
-				pageKind: page.kind,
-				outcome,
-				httpStatus: f.httpStatus,
-				contentType: f.contentType,
-				title: page.restricted ? null : (page.parsed?.title ?? null)?.slice(0, 200) ?? null,
-				contentHash,
-				excerpts,
-				hostileContent: hostile,
-				firstRetrievedAt: now,
-				firstRunId: started.id,
-				extractorVersion: EXTRACTOR_VERSION,
-				detail,
-			});
-			checks.push({ requestedUrl: page.requestedUrl, finalUrl: f.finalUrl, sourceId: id, outcome, retrievedAt: now, depth: page.depth, attempts: f.attempts });
-			for (const c of extracted) {
-				criteria.push({
-					...c,
-					id: criterionId(firmId, id, c),
-					workspaceId: actor.workspaceId,
-					firmId,
-					sourceId: id,
-					sourceClass,
-					capturedAt: now,
-					runId: started.id,
-					extractorVersion: EXTRACTOR_VERSION,
-					method: "rules/1",
-				});
-			}
-		}
-		const thesisCriteria = criteria.filter((c) => c.assertionType === "explicit" && c.field !== "application_requirements");
-		const assessment = assessCoverage(crawl, { explicit: thesisCriteria.length, observedOrInferred: criteria.filter((c) => c.assertionType !== "explicit").length });
-		if (assessment.status === "no_thesis_found" && criteria.some((c) => c.assertionType === "explicit")) assessment.reasons.push("only application wording was found, which is not an investment thesis");
-		const pagesOk = checks.filter((c) => c.outcome === "ok").length;
-		const blocked = checks.filter((c) => ["blocked_robots", "blocked_network_policy", "auth_required", "redirect_off_domain"].includes(c.outcome)).length;
-		const retryable = assessment.status === "research_incomplete" && checks.some((c) => RETRYABLE_OUTCOMES.has(c.outcome));
+		const ws = actor.workspaceId;
 
 		for (let attempt = 0; attempt < 5; attempt++) {
-			const [firm, run, approvals] = await Promise.all([this.getFirm(actor, firmId), this.store.get<ResearchRun>(C.researchRuns, started.id, actor.workspaceId), this.approvalsFor(actor, firmId)]);
+			const [firm, run, approvalEvents, states, allCriteria, existingEvents, existingEvidence, existingFindings, knownSources] = await Promise.all([
+				this.getFirm(actor, firmId),
+				this.store.get<ResearchRun>(C.researchRuns, started.id, ws),
+				this.approvalsFor(actor, firmId),
+				this.store.list<SourceState>(C.sourceStates, ws, { firmId }),
+				this.store.list<ResearchCriterion>(C.researchCriteria, ws, { firmId }),
+				this.store.list<InvestmentEvent>(C.investmentEvents, ws, { firmId }),
+				this.store.list<EventEvidence>(C.eventEvidence, ws, { firmId }),
+				this.store.list<ResearchFinding>(C.researchFindings, ws, { firmId }),
+				this.store.list<ResearchSource>(C.researchSources, ws, { firmId }),
+			]);
 			if (!run) throw notFound("Run");
-			const knownSources = new Set((await Promise.all(sources.map(async (s) => ((await this.store.get(C.researchSources, s.id, actor.workspaceId)) ? s.id : null)))).filter(Boolean) as string[]);
-			const knownCriteria = new Set((await Promise.all(criteria.map(async (c) => ((await this.store.get(C.researchCriteria, c.id, actor.workspaceId)) ? c.id : null)))).filter(Boolean) as string[]);
-			const newSources = sources.filter((s) => !knownSources.has(s.id));
-			const newCriteria = criteria.filter((c) => !knownCriteria.has(c.id));
-			const criterionIds = criteria.map((c) => c.id);
+			const now = this.store.now();
+			const approvals = currentApprovals(approvalEvents);
+			// Baseline: nothing from this firm has ever been read successfully, so everything found is context, not news.
+			const baseline = !states.some((s) => s.lastSuccessAt);
+			const plan = planRun({
+				workspaceId: ws,
+				firm,
+				runId: started.id,
+				now,
+				baseline,
+				lookbackDays: this.deps.lookbackDays,
+				crawl,
+				priorStates: new Map(states.map((s) => [s.url, s])),
+				allCriteria,
+				previousCurrentIds: firm.currentCriterionIds,
+				approvals,
+				existingEvents,
+				existingEvidenceIds: new Set(existingEvidence.map((e) => e.id)),
+				existingFindings,
+				sourceUrlById: new Map(knownSources.map((s) => [s.id, s.finalUrl])),
+			});
+			const knownSourceIds = new Set(knownSources.map((s) => s.id));
+			const knownCriterionIds = new Set(allCriteria.map((c) => c.id));
+			const newSources = plan.sources.filter((s) => !knownSourceIds.has(s.id));
+			const newCriteria = plan.freshCriteria.filter((c) => !knownCriterionIds.has(c.id));
+			const freshIds = plan.freshCriteria.map((c) => c.id);
+			const carriedIds = plan.carriedCriteria.map((c) => c.id);
+			const union = [...plan.freshCriteria, ...plan.carriedCriteria];
+			const currentIds = [...freshIds, ...carriedIds];
+
+			const assessment = assessCoverage(crawl, {
+				explicit: union.filter((c) => c.assertionType === "explicit" && c.field !== "application_requirements").length,
+				observedOrInferred: union.filter((c) => c.assertionType !== "explicit").length,
+			});
+			if (assessment.status === "no_thesis_found" && union.some((c) => c.assertionType === "explicit")) assessment.reasons.push("only application wording was found, which is not an investment thesis");
+			if (carriedIds.length) assessment.reasons.push(`${carriedIds.length} criterion/criteria kept from earlier runs because their pages were not re-read this time`);
+			const pagesOk = plan.checks.filter((c) => c.outcome === "ok").length;
+			const blocked = plan.checks.filter((c) => ["blocked_robots", "blocked_network_policy", "auth_required", "redirect_off_domain"].includes(c.outcome)).length;
+			const retryable = assessment.status === "research_incomplete" && plan.checks.some((c) => RETRYABLE_OUTCOMES.has(c.outcome));
 			const supersededByNewer = !!firm.lastRunStartedAt && (firm.lastRunStartedAt > run.startedAt || (firm.lastRunStartedAt === run.startedAt && (firm.lastRunId ?? "") > run.id));
-			const conflicts = detectConflicts(criteria, currentApprovals(approvals));
+			const conflicts = detectConflicts(union, approvals);
 			const completedAt = this.store.now();
 			const reasons = supersededByNewer ? [...assessment.reasons, "a newer run for this firm had already been recorded; this run did not replace the profile"] : assessment.reasons;
+			const findings = plan.findings.map((f) => ({ ...f, priorRunId: firm.lastRunId }));
 			const completed: ResearchRun = {
 				...run,
 				status: "completed",
 				completedAt,
 				outcome: assessment.status,
+				success: plan.success,
+				baseline,
+				carriedCriterionIds: carriedIds,
 				outcomeReasons: reasons,
-				checks,
-				criterionIds,
-				counts: { pagesAttempted: checks.length, pagesOk, pagesFailed: checks.length - pagesOk - blocked, pagesBlocked: blocked, newSources: newSources.length, newCriteria: newCriteria.length },
+				checks: plan.checks,
+				criterionIds: freshIds,
+				counts: { pagesAttempted: plan.checks.length, pagesOk, pagesFailed: plan.checks.length - pagesOk - blocked, pagesBlocked: blocked, newSources: newSources.length, newCriteria: newCriteria.length },
 			};
+			const asRecord = (v: unknown) => v as Record<string, unknown>;
 			const writes: StoreWrite[] = [
-				...newSources.map((s) => ({ collection: C.researchSources, id: s.id, value: s as unknown as Record<string, unknown>, create: true })),
-				...newCriteria.map((c) => ({ collection: C.researchCriteria, id: c.id, value: c as unknown as Record<string, unknown>, create: true })),
-				{ collection: C.researchRuns, id: run.id, value: completed as unknown as Record<string, unknown>, ifVersion: run.__version },
+				...newSources.map((s) => ({ collection: C.researchSources, id: s.id, value: asRecord(s), create: true })),
+				...newCriteria.map((c) => ({ collection: C.researchCriteria, id: c.id, value: asRecord(c), create: true })),
+				{ collection: C.researchRuns, id: run.id, value: asRecord(completed), ifVersion: run.__version },
 			];
-			const audit = [{ eventType: "research.run_completed", entityRef: { type: "research_run", id: run.id }, payload: { firmId, runId: run.id, status: assessment.status, pagesOk, pagesAttempted: checks.length, newSources: newSources.length, newCriteria: newCriteria.length, superseded: supersededByNewer } }];
-			let next = firm;
+			const audit: { eventType: string; entityRef: { type: string; id: string }; payload: Record<string, unknown> }[] = [
+				{ eventType: "research.run_completed", entityRef: { type: "research_run", id: run.id }, payload: { firmId, runId: run.id, status: assessment.status, success: plan.success, baseline, pagesOk, pagesAttempted: plan.checks.length, newSources: newSources.length, newCriteria: newCriteria.length, findings: findings.length, events: plan.events.length, superseded: supersededByNewer } },
+			];
+			let nextFirm = firm;
 			if (!supersededByNewer) {
-				const added = criterionIds.filter((i) => !firm.currentCriterionIds.includes(i));
-				const removed = firm.currentCriterionIds.filter((i) => !criterionIds.includes(i));
-				const named = firm.nameSource === "domain" ? cleanTitleToName(homeTitle, firm.canonicalDomain) : null;
-				next = {
+				for (const st of plan.states) writes.push({ collection: C.sourceStates, id: st.state.id, value: asRecord(st.state), ...(st.create ? { create: true } : { ifVersion: st.priorVersion }) });
+				for (const e of plan.events) writes.push({ collection: C.investmentEvents, id: e.id, value: asRecord(e), create: true });
+				for (const e of plan.evidence) writes.push({ collection: C.eventEvidence, id: e.id, value: asRecord(e), create: true });
+				for (const f of findings) writes.push({ collection: C.researchFindings, id: f.id, value: asRecord(f), create: true });
+				for (const f of findings) audit.push({ eventType: "research.finding_created", entityRef: { type: "research_finding", id: f.id }, payload: { firmId, findingId: f.id, runId: run.id, kind: f.kind, severity: f.severity, version: f.version } });
+				for (const e of plan.events) audit.push({ eventType: "research.event_discovered", entityRef: { type: "investment_event", id: e.id }, payload: { firmId, eventId: e.id, runId: run.id, company: e.companyName, type: e.type, classification: e.classification, baseline: e.baseline } });
+				for (const c of plan.corroborations) audit.push({ eventType: "research.event_corroborated", entityRef: { type: "investment_event", id: c.eventId }, payload: { firmId, eventId: c.eventId, evidenceId: c.evidenceId, runId: run.id } });
+				const added = currentIds.filter((x) => !firm.currentCriterionIds.includes(x));
+				const removed = firm.currentCriterionIds.filter((x) => !currentIds.includes(x));
+				const named = firm.nameSource === "domain" ? cleanTitleToName(plan.homeTitle, firm.canonicalDomain) : null;
+				nextFirm = {
 					...firm,
 					...(named ? { name: named, nameSource: "page_title" as const } : {}),
 					researchStatus: assessment.status,
 					lastRunId: run.id,
 					lastRunStartedAt: run.startedAt,
 					lastResearchedAt: completedAt,
-					currentCriterionIds: criterionIds,
+					lastSuccessAt: plan.success ? completedAt : firm.lastSuccessAt,
+					currentCriterionIds: currentIds,
 					conflictCount: conflicts.length,
-					sourcesChecked: checks.length,
+					sourcesChecked: plan.checks.length,
 					stubReasons: assessment.status === "thesis_found" ? [] : reasons,
 					retryable,
 					lastError: null,
 					updatedAt: completedAt,
 				};
-				writes.push({ collection: C.firms, id: firm.id, value: next as unknown as Record<string, unknown>, ifVersion: firm.__version });
-				if (firm.researchStatus !== assessment.status) audit.push({ eventType: "research.status_changed", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId, from: firm.researchStatus, to: assessment.status, runId: run.id } } as never);
-				if (added.length || removed.length) audit.push({ eventType: "research.criteria_changed", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId, runId: run.id, added: added.length, removed: removed.length } } as never);
-				if (conflicts.length !== firm.conflictCount) audit.push({ eventType: "research.conflicts_changed", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId, runId: run.id, from: firm.conflictCount, to: conflicts.length } } as never);
+				writes.push({ collection: C.firms, id: firm.id, value: asRecord(nextFirm), ifVersion: firm.__version });
+				if (firm.researchStatus !== assessment.status) audit.push({ eventType: "research.status_changed", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId, from: firm.researchStatus, to: assessment.status, runId: run.id } });
+				if (added.length || removed.length) audit.push({ eventType: "research.criteria_changed", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId, runId: run.id, added: added.length, removed: removed.length } });
+				if (conflicts.length !== firm.conflictCount) audit.push({ eventType: "research.conflicts_changed", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId, runId: run.id, from: firm.conflictCount, to: conflicts.length } });
 			}
 			try {
 				await this.store.commit(actor, { writes, audit });
@@ -392,7 +436,7 @@ export class InvestorResearchModule {
 				if ((error as { code?: string }).code === "conflict") continue;
 				throw error;
 			}
-			return { firm: (await this.store.get<InvestorFirm>(C.firms, firmId, actor.workspaceId))!, run: (await this.store.get<ResearchRun>(C.researchRuns, run.id, actor.workspaceId))! };
+			return { firm: (await this.store.get<InvestorFirm>(C.firms, firmId, ws))!, run: (await this.store.get<ResearchRun>(C.researchRuns, run.id, ws))! };
 		}
 		throw conflict("Could not record the research run after repeated concurrent updates");
 	}
@@ -422,21 +466,35 @@ export class InvestorResearchModule {
 
 	// ------------------------------------------------------------------ verification
 
-	/** Asks Jev whether each current, verifiable criterion's passage supports its statement. Pending stays pending when Jev is unavailable. */
+	/** Asks Jev whether each current, verifiable criterion's and event's passage supports its statement. Pending stays pending when Jev is unavailable. */
 	async verifyFirm(actor: Actor, firmId: string, limit = 25): Promise<VerifySummary> {
 		const summary: VerifySummary = { attempted: 0, supported: 0, notSupported: 0, inconclusive: 0, errors: 0, skipped: null };
 		const firm = await this.getFirm(actor, firmId);
 		if (!this.deps.jev.identity.configured) return { ...summary, skipped: "jev_not_configured" };
-		const [criteria, verifications] = await Promise.all([this.store.list<ResearchCriterion>(C.researchCriteria, actor.workspaceId, { firmId }), this.store.list<CriterionVerification>(C.criterionVerifications, actor.workspaceId, { firmId })]);
+		const ws = actor.workspaceId;
+		const [criteria, verifications, events, evidence] = await Promise.all([
+			this.store.list<ResearchCriterion>(C.researchCriteria, ws, { firmId }),
+			this.store.list<CriterionVerification>(C.criterionVerifications, ws, { firmId }),
+			this.store.list<InvestmentEvent>(C.investmentEvents, ws, { firmId }),
+			this.store.list<EventEvidence>(C.eventEvidence, ws, { firmId }),
+		]);
 		const current = new Set(firm.currentCriterionIds);
-		const todo = criteria.filter((c) => current.has(c.id) && verifiable(c) && !verifications.some((v) => v.criterionId === c.id && v.passageHash === c.passageHash && v.status !== "verification_error")).slice(0, limit);
-		for (const c of todo) {
-			const outcome = await verifyCriterion(this.deps.jev, c, this.deps.jevTimeoutMs);
+		const conclusive = (v: CriterionVerification) => v.status !== "verification_error";
+		type Job = { criterionId: string | null; eventId: string | null; passageHash: string; statement: string; passage: string; name?: string };
+		const jobs: Job[] = [];
+		for (const c of criteria.filter((x) => current.has(x.id) && verifiable(x) && !verifications.some((v) => v.criterionId === x.id && v.passageHash === x.passageHash && conclusive(v)))) jobs.push({ criterionId: c.id, eventId: null, passageHash: c.passageHash, statement: statementFor(c), passage: c.passage });
+		for (const e of events.filter((x) => x.type !== "portfolio_addition")) {
+			const first = evidence.filter((x) => x.eventId === e.id).sort((a, b) => a.discoveredAt.localeCompare(b.discoveredAt))[0];
+			if (!first || verifications.some((v) => v.eventId === e.id && v.passageHash === first.passageHash && conclusive(v))) continue;
+			jobs.push({ criterionId: null, eventId: e.id, passageHash: first.passageHash, statement: eventStatement(e), passage: first.passage, name: e.companyName });
+		}
+		for (const job of jobs.slice(0, limit)) {
+			const outcome = await verifyStatement(this.deps.jev, job.statement, job.passage, this.deps.jevTimeoutMs, job.name);
 			if (outcome === "not_configured") return { ...summary, skipped: "jev_not_configured" };
-			const record: CriterionVerification = { id: newId("ver"), workspaceId: actor.workspaceId, firmId, criterionId: c.id, passageHash: c.passageHash, createdAt: this.store.now(), createdBy: actor.principalId, ...outcome };
+			const record: CriterionVerification = { id: newId("ver"), workspaceId: ws, firmId, criterionId: job.criterionId, eventId: job.eventId, passageHash: job.passageHash, createdAt: this.store.now(), createdBy: actor.principalId, ...outcome };
 			await this.store.commit(actor, {
 				writes: [{ collection: C.criterionVerifications, id: record.id, value: record as unknown as Record<string, unknown>, create: true }],
-				audit: [{ eventType: "research.verification_recorded", entityRef: { type: "research_criterion", id: c.id }, payload: { firmId, criterionId: c.id, status: record.status, provider: record.jev?.provider ?? null } }],
+				audit: [{ eventType: "research.verification_recorded", entityRef: { type: job.eventId ? "investment_event" : "research_criterion", id: (job.eventId ?? job.criterionId)! }, payload: { firmId, criterionId: job.criterionId, eventId: job.eventId, status: record.status, provider: record.jev?.provider ?? null } }],
 			});
 			summary.attempted++;
 			if (record.status === "source_supports") summary.supported++;
@@ -449,21 +507,29 @@ export class InvestorResearchModule {
 
 	// ------------------------------------------------------------------ review and approval
 
-	async review(actor: Actor, input: { firmId: string; criterionId?: string | null; action: ReviewAction; note: string; correctedValue?: string }): Promise<ResearchReview> {
+	async review(actor: Actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; action: ReviewAction; note: string; correctedValue?: string }): Promise<ResearchReview> {
 		const firm = await this.getFirm(actor, input.firmId);
-		if (!["flag", "dispute", "correct", "note"].includes(input.action)) throw invalid("Unknown review action");
+		if (!["flag", "dispute", "correct", "note", "confirm", "dismiss"].includes(input.action)) throw invalid("Unknown review action");
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
 		const correctedValue = input.correctedValue?.trim() || null;
 		if (input.action === "correct" && (!correctedValue || correctedValue.length > 200)) throw invalid("A correction needs the corrected value (≤200 characters)");
+		const subjects = [input.criterionId, input.eventId, input.findingId].filter(Boolean);
+		if (subjects.length > 1) throw invalid("A review concerns one criterion, event or finding");
 		if (input.criterionId) {
 			const criterion = await this.store.get<ResearchCriterion>(C.researchCriteria, input.criterionId, actor.workspaceId);
 			if (!criterion || criterion.firmId !== firm.id) throw notFound("Criterion");
-		} else if (input.action === "correct") throw invalid("A correction must name the criterion it corrects");
-		const record: ResearchReview = { id: newId("rev"), workspaceId: actor.workspaceId, firmId: firm.id, criterionId: input.criterionId ?? null, action: input.action, note, correctedValue: input.action === "correct" ? correctedValue : null, createdAt: this.store.now(), createdBy: actor.principalId };
+		} else if (input.eventId) {
+			const event = await this.store.get<InvestmentEvent>(C.investmentEvents, input.eventId, actor.workspaceId);
+			if (!event || event.firmId !== firm.id) throw notFound("Event");
+		} else if (input.findingId) {
+			const finding = await this.store.get<ResearchFinding>(C.researchFindings, input.findingId, actor.workspaceId);
+			if (!finding || finding.firmId !== firm.id) throw notFound("Finding");
+		} else if (input.action === "correct" || input.action === "confirm" || input.action === "dismiss") throw invalid(`${input.action} must name what it concerns`);
+		const record: ResearchReview = { id: newId("rev"), workspaceId: actor.workspaceId, firmId: firm.id, criterionId: input.criterionId ?? null, eventId: input.eventId ?? null, findingId: input.findingId ?? null, action: input.action, note, correctedValue: input.action === "correct" ? correctedValue : null, createdAt: this.store.now(), createdBy: actor.principalId };
 		await this.store.commit(actor, {
 			writes: [{ collection: C.researchReviews, id: record.id, value: record as unknown as Record<string, unknown>, create: true }],
-			audit: [{ eventType: "research.review_recorded", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId: firm.id, criterionId: record.criterionId, action: record.action, reviewId: record.id } }],
+			audit: [{ eventType: "research.review_recorded", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId: firm.id, criterionId: record.criterionId, eventId: record.eventId, findingId: record.findingId, action: record.action, reviewId: record.id } }],
 		});
 		return record;
 	}
@@ -557,14 +623,15 @@ export class InvestorResearchModule {
 
 	// ------------------------------------------------------------------ reads
 
-	private isStale(lastResearchedAt: string | null): boolean {
-		return !!lastResearchedAt && Date.parse(this.store.now()) - Date.parse(lastResearchedAt) > this.deps.staleAfterDays * 86_400_000;
+	private isStale(lastSuccessAt: string | null): boolean {
+		return !!lastSuccessAt && Date.parse(this.store.now()) - Date.parse(lastSuccessAt) > this.deps.staleAfterDays * 86_400_000;
 	}
 
 	async list(actor: Actor, filter: { query?: string; status?: ResearchStatus } = {}): Promise<FirmListItem[]> {
 		if (filter.status && !RESEARCH_STATUSES.includes(filter.status)) throw invalid("Unknown research status");
-		const [firms, criteria] = await Promise.all([this.store.list<InvestorFirm>(C.firms, actor.workspaceId), this.store.list<ResearchCriterion>(C.researchCriteria, actor.workspaceId)]);
+		const [firms, criteria, targets] = await Promise.all([this.store.list<InvestorFirm>(C.firms, actor.workspaceId), this.store.list<ResearchCriterion>(C.researchCriteria, actor.workspaceId), this.store.list<MonitoringTarget>(C.monitoringTargets, actor.workspaceId)]);
 		const byId = new Map(criteria.map((c) => [c.id, c]));
+		const targetByFirm = new Map(targets.map((t) => [t.firmId, t]));
 		const q = filter.query?.trim().toLowerCase();
 		const out: FirmListItem[] = [];
 		for (const f of firms) {
@@ -574,6 +641,7 @@ export class InvestorResearchModule {
 				const hay = [f.name, f.canonicalDomain, f.website, ...current.map((c) => `${c.field} ${c.label} ${c.value}`.replace(/_/g, " "))].join(" ").toLowerCase();
 				if (!q.split(/\s+/).every((t) => hay.includes(t))) continue;
 			}
+			const t = targetByFirm.get(f.id);
 			out.push({
 				id: f.id,
 				name: f.name,
@@ -581,34 +649,47 @@ export class InvestorResearchModule {
 				canonicalDomain: f.canonicalDomain,
 				researchStatus: f.researchStatus,
 				lastResearchedAt: f.lastResearchedAt,
+				lastSuccessAt: f.lastSuccessAt,
 				conflictCount: f.conflictCount,
 				sourcesChecked: f.sourcesChecked,
 				stubReasons: f.stubReasons,
 				criteriaCount: current.length,
 				explicitCount: current.filter((c) => c.assertionType === "explicit").length,
-				stale: this.isStale(f.lastResearchedAt),
+				stale: this.isStale(f.lastSuccessAt ?? f.lastResearchedAt),
 				stub: f.researchStatus !== "thesis_found",
 				retryable: f.retryable,
+				monitoring: t ? { enabled: t.enabled, intervalMinutes: t.intervalMinutes, nextCheckAt: t.nextCheckAt, lastAttemptAt: t.lastAttemptAt, lastSuccessAt: t.lastSuccessAt, consecutiveFailures: t.consecutiveFailures, running: !!t.lease && Date.parse(t.lease.expiresAt) > Date.parse(this.store.now()) } : null,
 			});
 		}
 		return out.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
+	async timeline(actor: Actor, firmId: string, filter: TimelineFilter = {}): Promise<TimelineItem[]> {
+		return buildTimeline(await this.profile(actor, firmId), filter);
+	}
+
 	async profile(actor: Actor, firmId: string): Promise<FirmProfile> {
 		const firm = await this.getFirm(actor, firmId);
-		const [runs, sources, criteria, verifications, reviews, approvals] = await Promise.all([
-			this.store.list<ResearchRun>(C.researchRuns, actor.workspaceId, { firmId }),
-			this.store.list<ResearchSource>(C.researchSources, actor.workspaceId, { firmId }),
-			this.store.list<ResearchCriterion>(C.researchCriteria, actor.workspaceId, { firmId }),
-			this.store.list<CriterionVerification>(C.criterionVerifications, actor.workspaceId, { firmId }),
-			this.store.list<ResearchReview>(C.researchReviews, actor.workspaceId, { firmId }),
+		const ws = actor.workspaceId;
+		const [runs, sources, criteria, verifications, reviews, approvals, target, states, events, evidence, findings] = await Promise.all([
+			this.store.list<ResearchRun>(C.researchRuns, ws, { firmId }),
+			this.store.list<ResearchSource>(C.researchSources, ws, { firmId }),
+			this.store.list<ResearchCriterion>(C.researchCriteria, ws, { firmId }),
+			this.store.list<CriterionVerification>(C.criterionVerifications, ws, { firmId }),
+			this.store.list<ResearchReview>(C.researchReviews, ws, { firmId }),
 			this.approvalsFor(actor, firmId),
+			this.store.get<MonitoringTarget>(C.monitoringTargets, firmId, ws),
+			this.store.list<SourceState>(C.sourceStates, ws, { firmId }),
+			this.store.list<InvestmentEvent>(C.investmentEvents, ws, { firmId }),
+			this.store.list<EventEvidence>(C.eventEvidence, ws, { firmId }),
+			this.store.list<ResearchFinding>(C.researchFindings, ws, { firmId }),
 		]);
 		runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 		const sourceById = new Map(sources.map((s) => [s.id, s]));
 		const lastSeen = new Map<string, string>();
 		for (const r of runs.filter((r) => r.status === "completed" && r.completedAt)) for (const id of r.criterionIds) if (!lastSeen.has(id) || r.completedAt! > lastSeen.get(id)!) lastSeen.set(id, r.completedAt!);
 		const current = new Set(firm.currentCriterionIds);
+		const carried = new Set(runs.find((r) => r.status === "completed" && r.id === firm.lastRunId)?.carriedCriterionIds ?? []);
 		const view = (c: ResearchCriterion): CriterionView => {
 			const applicable = verifiable(c);
 			const latest = verifications.filter((v) => v.criterionId === c.id && v.passageHash === c.passageHash).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
@@ -619,6 +700,7 @@ export class InvestorResearchModule {
 				verification: applicable && latest ? latest.status : "pending",
 				verificationDetail: applicable ? latest : null,
 				verificationApplicable: applicable,
+				carriedForward: carried.has(c.id),
 				freshness: this.isStale(lastConfirmedAt) ? "stale" : "fresh",
 				lastConfirmedAt,
 				current: current.has(c.id),
@@ -630,6 +712,53 @@ export class InvestorResearchModule {
 		const views = criteria.map(view).sort((a, b) => order[a.assertionType] - order[b.assertionType] || a.field.localeCompare(b.field) || a.label.localeCompare(b.label));
 		const currentViews = views.filter((v) => v.current);
 		const approvedCurrent = currentApprovals(approvals);
+		const eventViews = events
+			.map((e): InvestmentEventView => {
+				const ev = evidence.filter((x) => x.eventId === e.id).sort((a, b) => a.discoveredAt.localeCompare(b.discoveredAt));
+				const rv = reviews.filter((r) => r.eventId === e.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+				const first = ev[0];
+				const vlatest = verifications.filter((v) => v.eventId === e.id && (!first || v.passageHash === first.passageHash)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+				const published = ev.map((x) => x.publishedAt).filter(Boolean).sort() as string[];
+				return {
+					...e,
+					earliestPublishedAt: published[0] ?? e.earliestPublishedAt,
+					announcedAt: e.announcedAt ?? (ev.map((x) => x.announcedAt).filter(Boolean).sort()[0] as string | undefined) ?? null,
+					type: e.type === "new_investment" ? (ev.find((x) => x.type !== "new_investment" && x.type !== "portfolio_addition")?.type ?? e.type) : e.type,
+					round: e.round ?? ev.find((x) => x.round)?.round ?? null,
+					roundAmountUsd: e.roundAmountUsd ?? ev.find((x) => x.roundAmountUsd !== null)?.roundAmountUsd ?? null,
+					firmAmountUsd: e.firmAmountUsd ?? ev.find((x) => x.firmAmountUsd !== null)?.firmAmountUsd ?? null,
+					amountSourceStated: e.amountSourceStated || ev.some((x) => x.roundAmountUsd !== null || x.firmAmountUsd !== null),
+					evidence: ev,
+					reviews: rv,
+					reviewState: reviewStateOf(rv, e.involvement === "implied_by_source" || e.companyMatch.status === "uncertain" ? "needs_review" : "unreviewed"),
+					verification: e.type === "portfolio_addition" ? "pending" : (vlatest?.status ?? "pending"),
+					verificationDetail: vlatest,
+					corroborated: new Set(ev.map((x) => x.sourceId)).size > 1,
+				};
+			})
+			.sort((a, b) => b.discoveredAt.localeCompare(a.discoveredAt));
+		const findingViews = findings
+			.map((f) => {
+				const rv = reviews.filter((r) => r.findingId === f.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+				const crits = f.newCriterionIds.map((id) => views.find((v) => v.id === id)).filter(Boolean) as CriterionView[];
+				const verification: VerificationStatus = !crits.length ? "pending" : crits.every((c) => c.verification === "source_supports") ? "source_supports" : crits.some((c) => c.verification === "source_does_not_support") ? "source_does_not_support" : crits.some((c) => c.verification === "verification_error") ? "verification_error" : crits.some((c) => c.verification === "inconclusive") ? "inconclusive" : "pending";
+				return { ...f, reviews: rv, reviewState: reviewStateOf(rv, f.reviewRequired ? "needs_review" : "unreviewed"), verification };
+			})
+			.sort((a, b) => b.discoveredAt.localeCompare(a.discoveredAt) || b.version - a.version);
+		const staleDays = this.deps.staleSourceDays;
+		const nowMs = Date.parse(this.store.now());
+		const staleSources = states.filter((s) => s.status !== "present" || !s.lastSuccessAt || nowMs - Date.parse(s.lastSuccessAt) > staleDays * 86_400_000).map((s) => ({ url: s.url, lastSuccessAt: s.lastSuccessAt, status: s.status }));
+		const lastSuccessAt = firm.lastSuccessAt;
+		const health: ResearchHealth = {
+			lastAttemptAt: target?.lastAttemptAt ?? firm.lastResearchedAt,
+			lastSuccessAt,
+			consecutiveFailures: target?.consecutiveFailures ?? 0,
+			failing: (target?.consecutiveFailures ?? 0) >= 3,
+			stale: lastSuccessAt ? nowMs - Date.parse(lastSuccessAt) > staleDays * 86_400_000 : firm.researchStatus !== "pending",
+			staleSources,
+			inaccessibleSources: states.filter((s) => s.status === "inaccessible").length,
+			missingSources: states.filter((s) => s.status === "missing").length,
+		};
 		return {
 			firm,
 			stub: firm.researchStatus !== "thesis_found",
@@ -643,10 +772,47 @@ export class InvestorResearchModule {
 			runs,
 			reviews: reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
 			staleAfterDays: this.deps.staleAfterDays,
-			stale: this.isStale(firm.lastResearchedAt),
+			stale: this.isStale(lastSuccessAt ?? firm.lastResearchedAt),
+			monitoring: target,
+			events: eventViews,
+			findings: findingViews,
+			health,
 			disclaimer: RESEARCH_DISCLAIMER,
 		};
 	}
+}
+
+/** What a person last decided about an item. `note` and `flag` do not close it; confirm/dismiss/dispute do. */
+export function reviewStateOf(reviews: ResearchReview[], fallback: EventReviewState): EventReviewState {
+	const decisive = reviews.find((r) => r.action === "confirm" || r.action === "dismiss" || r.action === "dispute" || r.action === "flag");
+	if (!decisive) return fallback;
+	return decisive.action === "confirm" ? "confirmed" : decisive.action === "dismiss" ? "dismissed" : decisive.action === "dispute" ? "disputed" : "needs_review";
+}
+
+export type { TimelineFilter };
+
+/** What needs a person, across the workspace, each item exactly once and in one category. Items come from persisted records with deterministic ids, so repeated runs never raise the same item twice. No delivery channel exists yet: this is the attention list the UI reads. */
+export async function attentionFor(research: InvestorResearchModule, actor: Actor): Promise<AttentionItem[]> {
+	const out: AttentionItem[] = [];
+	for (const f of await research.list(actor)) {
+		const p = await research.profile(actor, f.id);
+		const seen = new Set<string>();
+		const add = (kind: AttentionItem["kind"], title: string, at: string, refId: string) => {
+			if (seen.has(refId)) return;
+			seen.add(refId);
+			out.push({ firmId: f.id, firmName: f.name, kind, title, at, refId });
+		};
+		const latest = new Map<string, (typeof p.findings)[number]>();
+		for (const x of p.findings) if (!latest.has(x.subjectKey) || latest.get(x.subjectKey)!.version < x.version) latest.set(x.subjectKey, x);
+		const baseline = new Set(p.runs.filter((r) => r.baseline).map((r) => r.id));
+		for (const x of latest.values()) if (x.severity === "material" && !baseline.has(x.runId) && (x.reviewState === "needs_review" || x.reviewState === "unreviewed")) add("strategy_change", x.summary.slice(0, 160), x.discoveredAt, x.id);
+		for (const e of p.events) if (e.type !== "portfolio_addition" && e.classification === "new" && !e.baseline && (e.reviewState === "unreviewed" || e.reviewState === "needs_review")) add("new_investment", `${e.companyName}: ${e.type.replace(/_/g, " ")}`, e.discoveredAt, e.id);
+		for (const e of p.events) if (e.reviewState === "needs_review") add("needs_review", `${e.companyName}: check this ${e.type === "portfolio_addition" ? "portfolio listing" : "announcement"}`, e.discoveredAt, e.id);
+		for (const x of latest.values()) if (x.reviewState === "needs_review") add("needs_review", x.summary.slice(0, 160), x.discoveredAt, x.id);
+		if (p.health.failing) add("research_failing", `Research is failing (${p.health.consecutiveFailures} checks in a row)${p.monitoring?.lastError ? `: ${p.monitoring.lastError.message}` : ""}`, p.health.lastAttemptAt ?? p.firm.updatedAt, `health:${f.id}`);
+		else if (p.health.stale) add("research_stale", "No successful research recently; showing the last successful results", p.health.lastSuccessAt ?? p.firm.updatedAt, `stale:${f.id}`);
+	}
+	return out.sort((a, b) => b.at.localeCompare(a.at));
 }
 
 /** The approvals in force: approve events not later withdrawn. */

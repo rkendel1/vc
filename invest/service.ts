@@ -10,6 +10,7 @@ import { DocumentIngestionModule, type IngestionLimits } from "./modules/documen
 import { EvaluationOrchestrator, type OrchestratorOptions } from "./modules/evaluation-orchestrator.ts";
 import { EvidenceRegistryModule } from "./modules/evidence-registry.ts";
 import { InvestorResearchModule, type ResearchDeps } from "./modules/investor-research.ts";
+import { MonitoringModule, type MonitoringOptions } from "./modules/monitoring.ts";
 import { InvestmentThesisModule } from "./modules/investment-thesis.ts";
 import { StartupRegistryModule } from "./modules/startup-registry.ts";
 import { C, type InvestStore } from "./store/store.ts";
@@ -22,6 +23,7 @@ export type ServiceDeps = {
 	evaluation: OrchestratorOptions;
 	logger: Logger;
 	research: Omit<ResearchDeps, "store" | "jev">;
+	monitoring: MonitoringOptions;
 };
 
 
@@ -35,6 +37,7 @@ export class InvestmentService {
 	readonly decisions: DecisionRecordsModule;
 	readonly audit: AuditModule;
 	readonly research: InvestorResearchModule;
+	readonly monitoring: MonitoringModule;
 
 	constructor(private readonly deps: ServiceDeps) {
 		this.theses = new InvestmentThesisModule(deps.store);
@@ -45,6 +48,7 @@ export class InvestmentService {
 		this.decisions = new DecisionRecordsModule(deps.store);
 		this.audit = new AuditModule(deps.store);
 		this.research = new InvestorResearchModule({ ...deps.research, store: deps.store, jev: deps.jev });
+		this.monitoring = new MonitoringModule(deps.store, this.research, deps.monitoring);
 	}
 
 	get jevIdentity() {
