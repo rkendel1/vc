@@ -1,6 +1,8 @@
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Outcome, ProvenanceClass, VerificationStatus } from "../../../invest/domain/types.ts";
 import { ApiError } from "./api.ts";
+import { formatDate } from "./format.ts";
+import { TONE_MARK, type Entry, type Tone } from "./vocab.ts";
 
 // ---------------------------------------------------------------------------
 // Session
@@ -240,9 +242,7 @@ export function Loading({ what }: { what: string }) {
 }
 
 export function when(iso: string | null | undefined): string {
-	if (!iso) return "—";
-	const d = new Date(iso);
-	return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+	return formatDate(iso);
 }
 
 export function shortDigest(d: string): string {
@@ -272,4 +272,110 @@ export function money(value: number, unit?: string): string {
 	if (unit === "percent") return `${value}%`;
 	if (unit === "months") return `${value} months`;
 	return String(value);
+}
+
+// ---------------------------------------------------------------------------
+// Product components: one way to show a status, a notice, a confirmation, an empty state, a progress trail
+// ---------------------------------------------------------------------------
+
+/** A status badge. The meaning is in the words and a glyph, never in colour alone; the longer explanation is its tooltip and, where room allows, a line beneath. */
+export function Badge({ entry, tone, children, explain }: { entry?: Entry; tone?: Tone; children?: ReactNode; explain?: boolean }) {
+	const t = entry?.tone ?? tone ?? "neutral";
+	return (
+		<span className={`badge tone-${t}`} title={entry?.help || undefined}>
+			<span className="badge-mark" aria-hidden="true">
+				{TONE_MARK[t]}
+			</span>
+			{children ?? entry?.label}
+			{explain && entry?.help ? <span className="badge-help"> — {entry.help}</span> : null}
+		</span>
+	);
+}
+
+/** Feedback that stays until the next action. `status` is polite; `alert` interrupts. */
+export function Notice({ kind = "info", title, children }: { kind?: "info" | "success" | "warn" | "error"; title?: ReactNode; children?: ReactNode }) {
+	return (
+		<div className={`notice ${kind}`} role={kind === "error" ? "alert" : "status"}>
+			{title ? <strong>{title}</strong> : null}
+			{children ? <div>{children}</div> : null}
+		</div>
+	);
+}
+
+export function EmptyState({ title, children, actions }: { title: ReactNode; children?: ReactNode; actions?: ReactNode }) {
+	return (
+		<div className="empty-state">
+			<strong>{title}</strong>
+			{children ? <p className="muted">{children}</p> : null}
+			{actions ? <div className="row">{actions}</div> : null}
+		</div>
+	);
+}
+
+/** A trail of states with the current one marked; each step names what is done, what is next. */
+export function Steps({ steps }: { steps: { label: string; state: "done" | "current" | "todo" | "blocked"; note?: string }[] }) {
+	return (
+		<ol className="steps" aria-label="Progress">
+			{steps.map((s) => (
+				<li key={s.label} className={`step ${s.state}`} aria-current={s.state === "current" ? "step" : undefined}>
+					<span className="step-mark" aria-hidden="true">
+						{s.state === "done" ? "✓" : s.state === "blocked" ? "✕" : s.state === "current" ? "→" : "○"}
+					</span>
+					<span>
+						<strong>{s.label}</strong>
+						<span className="visually-hidden">{`: ${s.state === "done" ? "done" : s.state === "current" ? "current step" : s.state === "blocked" ? "stopped" : "not yet"}`}</span>
+						{s.note ? <span className="muted small"> {s.note}</span> : null}
+					</span>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+/**
+ * A consequential action behind a modal confirmation. Uses the native dialog element: focus moves inside, Tab stays inside, Esc cancels,
+ * and focus returns to the button that opened it. The consequence is stated in plain words; nothing happens until the person confirms.
+ */
+export function ConfirmButton({ label, title, consequence, confirmLabel, onConfirm, className, disabled, danger, children }: { label: ReactNode; title: string; consequence: ReactNode; confirmLabel: string; onConfirm: () => Promise<unknown> | unknown; className?: string; disabled?: boolean; danger?: boolean; children?: ReactNode }) {
+	const ref = useRef<HTMLDialogElement>(null);
+	const [busy, setBusy] = useState(false);
+	return (
+		<>
+			<button type="button" className={className} disabled={disabled} onClick={() => ref.current?.showModal()}>
+				{label}
+			</button>
+			<dialog ref={ref} className="confirm" aria-labelledby={`dlg-${title.replace(/\W+/g, "-")}`} onClose={() => setBusy(false)}>
+				<h2 id={`dlg-${title.replace(/\W+/g, "-")}`}>{title}</h2>
+				<div className="stack">
+					<div>{consequence}</div>
+					{children}
+					<div className="row">
+						<button type="button" className={danger ? "danger" : "primary"} disabled={busy} onClick={async () => {
+							setBusy(true);
+							try {
+								await onConfirm();
+							} finally {
+								setBusy(false);
+								ref.current?.close();
+							}
+						}}>
+							{confirmLabel}
+						</button>
+						<button type="button" className="quiet" onClick={() => ref.current?.close()} autoFocus>
+							Cancel
+						</button>
+					</div>
+				</div>
+			</dialog>
+		</>
+	);
+}
+
+/** Shown for a route the person's role does not include, instead of a blank page or a raw error. */
+export function NotAvailable({ home }: { home: string }) {
+	return (
+		<EmptyState title="This page is not part of your role" actions={<a className="button" href={home ? href(home) : "#/"}>Go to your start page</a>}>
+			Your account does not include this area. If you need it, ask your workspace administrator.
+		</EmptyState>
+	);
 }

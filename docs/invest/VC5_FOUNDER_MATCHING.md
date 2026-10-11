@@ -12,7 +12,7 @@ treats an unverified criterion as fact, or treats missing evidence as unsuitabil
 | Startup records | `Startup` plus evidence/documents already exist and are workspace-scoped (`startup.write`, `document.write`). | Reused for identity, uploads and evidence. The profile is a new versioned record that points at them. |
 | Investor criteria | Sourced criteria, approvals, published profiles and reconciliation exist (VC-2/VC-4). | No second thesis store: the matcher reads `ReconciliationModule.forFirm`, the research profile, approvals, and the published directory. |
 | Jev | `invest/jev/` is a decision contract used for *verifying a passage supports a statement* and for thesis evaluation. It is not a matching or semantic-ranking interface and no tested structured, evidence-linked matching path exists. | **Matching is deterministic. No model is used** (`modelUse: null` is recorded on every evaluation). |
-| Founder permissions | The `founder` role could only read and contribute. | It now also holds `startup.write`, `document.write`, `evidence.write`, `evaluation.run` (all existing permissions). No new permission, no consent or sharing change. |
+| Founder permissions | The `founder` role could only read and contribute. | It now also holds `startup.write`, `document.write`, `evaluation.run` (existing permissions; `evidence.write` is deliberately withheld so a founder cannot attach reviewer-verified evidence about themselves, VC-6). No new permission, no consent or sharing change. |
 | FeltDB | `requireAbsent`, `ifVersion`, atomic transactions with audit in the same transaction (verified in `store.ts`). No native lease or CAS is assumed. | Versions and evaluations are create-fenced; the profile head and shortlist are version-fenced. |
 
 ## The four dimensions

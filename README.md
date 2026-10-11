@@ -1,57 +1,82 @@
-# Attn Invest — Jev for Investment Evaluation
+# Attn Invest
 
-A web application that evaluates a startup against an investor's own, versioned criteria. Startup
-claims become traceable evidence, Jev answers one bounded question per semantic criterion, and
-application code enforces thresholds, hard gates, evidence standards and review gates. The
-investor's decision is recorded separately, with every override attributable and audited.
+A web application where **founders** find investors that fit them, **investor representatives** control how their firm appears, and **moderators** keep that information trustworthy. Every investor criterion keeps its source, and every match explains itself. A fund team can also evaluate startups against its own versioned criteria with Jev.
 
-It is not a deal-sourcing tool, an investment adviser, or a company score.
+It is not a deal-sourcing tool, an investment adviser or a company score. A match is **not** a prediction that anyone will invest.
 
-## Layout
+## What each person can do
 
-| Path | Contents |
-| --- | --- |
-| `invest/` | Server: AppPort capabilities, domain modules, FeltDB store, Jev adapter, ingestion, tests, quality harness |
-| `apps/invest-web/` | The investor web interface (React, Vite) |
-| `docs/invest/` | Architecture baseline, acceptance checklist, pilot quality report, investor research pipeline (VC-2) |
+| Role | Start page | Can do |
+| --- | --- | --- |
+| **Founder** | Startup | Keep a private, versioned profile (unknown and not-applicable are valid answers); upload, replace or remove evidence; find investors; see why each fits or does not, with sources; save a private shortlist; work through prioritised next steps; re-run after changing anything and see what changed |
+| **Investor representative** | My firm | Claim a firm, prove control of its website, wait for a moderator to verify them, review the firm's criteria, approve and publish the ones that are right; see what every workspace currently sees; respond to what founders choose to share |
+| **Moderator** | Review queue | Verify or reject representative claims, resolve ambiguous entity matches, respond to shared contributions, see conflicts; every decision needs a reason and a confirmation and is recorded with their name |
+| **Fund team** (partner, analyst, viewer) | Overview | Maintain investment theses, evaluate startups against them, review findings and record decisions; read investor research |
+| **Operations** (anyone with `source.manage`) | Operations | Register research sources, watch monitoring, check system health |
+
+Navigation shows only what the signed-in person's role includes. The server enforces every permission regardless.
 
 ## Run it
 
-Requires Bun 1.3.13. This repository was extracted from [rkendel1/attn](https://github.com/rkendel1/attn), whose platform packages (FeltDB, AppPort) it uses as published npm dependencies; it has no source dependency on Attn.
+Requires Bun 1.3.13. This repository was extracted from [rkendel1/attn](https://github.com/rkendel1/attn); FeltDB and AppPort are published npm dependencies.
 
 ```sh
 bun install
 bun run jev:standin        # optional, development only: a lexical stand-in that speaks the Jev contract
-# in another shell:
-JEV_ENDPOINT=http://127.0.0.1:4500/decide JEV_API_KEY=dev-jev-key JEV_PROVIDER=standin \
-  bun run seed             # optional: demo thesis, four fictional startups, one evaluation each
 JEV_ENDPOINT=http://127.0.0.1:4500/decide JEV_API_KEY=dev-jev-key JEV_PROVIDER=standin \
   bun run start            # builds apps/invest-web and serves everything on http://localhost:3100
 ```
 
-Sign in with `dev-partner-token` (development only; production requires `AUTHBOUNDRY_CONFIG_PATH`).
-For UI work, `bun run dev` (server, restarts on change) plus `bun run dev:web` (Vite on
-5174, proxying `/appport` and `/files`).
+For UI work: `bun run dev` (server, restarts on change) plus `bun run dev:web` (Vite on 5174).
 
-The stand-in is a keyword heuristic, not Jev. Every manifest records `provider: standin`, so a report
-made with it can never be mistaken for a real judgment. Point `JEV_ENDPOINT` at a real Jev deployment
-for anything that matters.
+### Signing in, and who is what
 
-## Investor research (VC-2)
+Identity is a local registry, not an account system. A person signs in with a bearer **access token**; `AUTHBOUNDRY_CONFIG_PATH` points at a JSON file mapping each token's SHA-256 to a principal, a workspace and a **role** (`founder`, `investor_rep`, `moderator`, `partner`, `analyst`, `viewer`); see [`invest/auth.example.json`](invest/auth.example.json). A role is a fixed set of permissions (`invest/auth/authboundry-adapter.ts`); the application never grants more than the role. For development, `dev-partner-token` signs in as a fund partner (refused in production). There is no sign-up, password reset or external identity provider: an administrator edits the registry. Production refuses to start without `AUTHBOUNDRY_CONFIG_PATH` and `DOCUMENT_STORAGE_LINK_SECRET`.
 
-`bun run research -- invest/examples/vc-firms.example.csv --workspace ws-dev [--dry-run]` reconciles one profile per venture firm and researches each firm's own public pages within bounds. Findings are labelled explicit, observed or inferred, are traced to a source passage, and are never investor-approved theses; a firm with nothing found gets an explicit stub. See [`docs/invest/VC2_RESEARCH_PIPELINE.md`](docs/invest/VC2_RESEARCH_PIPELINE.md). Browse results under **Investors** in the web app.
+### Where investor data comes from
 
-Firms are also **monitored continuously** (VC-3): `bun run monitor -- run --workspace ws-dev` runs one cycle on demand, finds new announcements, source changes and proposed thesis changes, and shows them in a timeline for review without ever modifying investor-approved criteria. See [`docs/invest/VC3_MONITORING.md`](docs/invest/VC3_MONITORING.md). Durable state is declared in [`feltdb.flow`](feltdb.flow).
+* **Published by the firm:** criteria a moderator-verified representative approved and published. The only data shown as *Approved by the firm*.
+* **Researched in a workspace:** the firm's own public pages, read within bounds (`bun run research`, or automatically when a representative claims a firm), then re-read on a schedule (`bun run monitor`). Shown as *Stated on the firm's own site*; pages can be out of date.
+* **External sources:** curated datasets and funding-news feeds registered under Operations or `bun run sources`, normalised through format adapters (CSV, JSON, RSS/Atom). No provider is built in, and none is claimed to be supported: register only sources whose terms allow automated access.
+* **Contributions:** founders' notes, private by default, shared only by consent.
 
-**Founder matching (VC-5):** a private, versioned startup profile; explainable investor fit kept apart from readiness, evidence quality and research coverage (no score, no prediction, no model); a private shortlist with a prioritised action plan; reproducible evaluations. See [`docs/invest/VC5_FOUNDER_MATCHING.md`](docs/invest/VC5_FOUNDER_MATCHING.md).
+The investor list a founder sees is therefore **not the market**: only investors who published, or whom the founder's workspace researched.
 
-**Two-sided intelligence (VC-4):** curated third-party sources (`bun run sources -- …`, format adapters for RSS/Atom, CSV and JSON; no provider is built in), conservative entity resolution with reviewer-confirmed matches, per-field reconciliation that never overrides approved values, moderator-verified firm representatives who approve and publish their own criteria, and founders who contribute privately and share by consent. See [`docs/invest/VC4_COLLABORATION.md`](docs/invest/VC4_COLLABORATION.md).
+### What a match does and does not mean
+
+Four separate questions, never combined into a score: **Investor fit** (do the investor's sourced criteria allow this startup; unknown is not a mismatch; only approved or current, undisputed statements from the firm can rule an investor out), **Readiness** (what is not provided yet is not a failed requirement), **Evidence quality** (a document is not proof; independent support is shown separately) and **Research completeness** (how much is actually known about the investor). The rules are deterministic, versioned and listed in [`docs/invest/VC5_FOUNDER_MATCHING.md`](docs/invest/VC5_FOUNDER_MATCHING.md). No AI model is used for matching. Nothing has been validated against real investor outcomes.
+
+### What has and has not been validated
+
+Everything is exercised against fixtures and the local stack: unit and integration tests, the real HTTP boundary, and a real Chromium end-to-end run. **No live investor source, live Jev deployment or real investor behaviour has been tested**, and remote CI has not been run. Do not read passing tests as production readiness: see *Operational gaps* in [`docs/invest/PRODUCT_EXPERIENCE.md`](docs/invest/PRODUCT_EXPERIENCE.md).
+
+### Operating a deployment
+
+| Task | Command |
+| --- | --- |
+| Start the server and web app | `bun run start` |
+| Add firms for research (fund or operator) | `bun run research -- <file.csv> --workspace <id>` |
+| Refresh monitored firms on demand; run on a schedule in production | `bun run monitor -- run --workspace <id>` |
+| Register or run a curated source | `bun run sources -- …` (or Operations → Research sources) |
+| Seed a demo workspace | `bun run seed` |
+
+Configuration is in [`invest/.env.example`](invest/.env.example). Durable state is declared in [`feltdb.flow`](feltdb.flow).
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [`docs/invest/PRODUCT_EXPERIENCE.md`](docs/invest/PRODUCT_EXPERIENCE.md) | The customer experience for founders, representatives and moderators; navigation; vocabulary; what was fixed in VC-6; operational gaps |
+| [`docs/invest/VC5_FOUNDER_MATCHING.md`](docs/invest/VC5_FOUNDER_MATCHING.md) | Matching rules, evidence and versioning model, privacy |
+| [`docs/invest/VC4_COLLABORATION.md`](docs/invest/VC4_COLLABORATION.md) | Sources, entity resolution, reconciliation, representative workflow, contributions |
+| [`docs/invest/VC3_MONITORING.md`](docs/invest/VC3_MONITORING.md), [`VC2_RESEARCH_PIPELINE.md`](docs/invest/VC2_RESEARCH_PIPELINE.md) | Monitoring and research pipeline |
+| [`docs/invest/PR1_ARCHITECTURE_BASELINE.md`](docs/invest/PR1_ARCHITECTURE_BASELINE.md) | What was verified about FeltDB, AppPort and Jev; architecture invariants |
 
 ## Check it
 
 | Command | What it proves |
 | --- | --- |
-| `bun run test` | 271 tests (47 original, 55 VC-2 research, 51 VC-3 monitoring, 53 VC-4 collaboration, 65 VC-5 founder matching):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
+| `bun run test` | 292 tests (47 original, 55 VC-2 research, 51 VC-3 monitoring, 53 VC-4 collaboration, 65 VC-5 founder matching, 21 VC-6 product surface):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
 | `bun run typecheck` | Server and web app typecheck |
 | `bun run check:architecture` | The invariants in `docs/invest/PR1_ARCHITECTURE_BASELINE.md` §5 |
 | `bun run generate:check`, `doctor` | Generated manifest/client are current; AppPort doctor is clean |

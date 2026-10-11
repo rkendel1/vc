@@ -166,7 +166,7 @@ describe("evaluation: reproducible, explained, never overwritten", () => {
 		const s = await startup(c, c.f1);
 		const { evaluation: e, reused } = await c.svc.matching.evaluate(c.f1, { startupId: s.id, investorKey: "meridian.vc" });
 		expect(reused).toBe(false);
-		expect(e).toMatchObject({ sequence: 1, policyVersion: "match-policy/1", frameworkVersion: "readiness-framework/1", modelUse: null, previousEvaluationId: null, investorKey: "meridian.vc" });
+		expect(e).toMatchObject({ sequence: 1, policyVersion: "match-policy/2", frameworkVersion: "readiness-framework/1", modelUse: null, previousEvaluationId: null, investorKey: "meridian.vc" });
 		expect(e.inputs.profile).toMatchObject({ version: 1 });
 		expect(e.inputs.investor.publishedVersion).toBe(1);
 		expect(e.inputs.investor.factRefs.length).toBe(approvals.length);

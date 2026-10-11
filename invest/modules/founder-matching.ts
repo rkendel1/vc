@@ -310,6 +310,8 @@ export class FounderMatchingModule {
 			policyVersion: MATCH_POLICY_VERSION,
 			total: snaps.length,
 			shown: candidates.length,
+			/** Where the comparable investors come from. It is never the whole market. */
+			universe: { published: snaps.filter((x) => x.source === "published_profile").length, researched: snaps.filter((x) => x.source === "workspace_research").length },
 			candidates,
 			empty: snaps.length === 0 ? ("no_investors" as const) : candidates.length === 0 ? ("filtered_out" as const) : null,
 			evaluatedAt: now,

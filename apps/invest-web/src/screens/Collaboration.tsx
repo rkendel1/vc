@@ -1,17 +1,14 @@
 import { type FormEvent, useState } from "react";
 import type { ContributionKind, FieldReconciliation, LifecycleState, ReconciledClaim, SourceCategory } from "../../../../invest/domain/collab.ts";
 import { call } from "../api.ts";
-import { ErrorNote, Loading, Section, href, useAction, useCan, useLoad, when } from "../ui.tsx";
+import { audienceOf } from "../nav.ts";
+import { LIFECYCLE, SOURCE_CATEGORY } from "../vocab.ts";
+import { ConfirmButton, ErrorNote, Loading, Section, href, useAction, useCan, useLoad, useSession, when } from "../ui.tsx";
 
 /* Provenance is never collapsed into one badge: category, assertion, directness, lifecycle and freshness are shown separately. */
-export const CATEGORY_LABEL: Record<SourceCategory, string> = {
-	investor_verified: "Published by the firm",
-	official_public_source: "Firm's own site",
-	third_party_source: "Third-party source",
-	founder_contribution: "Founder contribution",
-	community_contribution: "Community contribution",
-};
-const LIFECYCLE_LABEL: Record<LifecycleState, string> = { proposed: "Proposed", needs_review: "Needs review", accepted: "Accepted as evidence", rejected: "Rejected", disputed: "Disputed", superseded: "Superseded" };
+export const CATEGORY_LABEL = SOURCE_CATEGORY as Record<SourceCategory, string>;
+const LIFECYCLE_LABEL = Object.fromEntries(Object.entries(LIFECYCLE).map(([k, v]) => [k, v.label])) as Record<LifecycleState, string>;
+const ASSERT_LABEL: Record<string, string> = { explicit: "Stated", observed: "Seen in past activity", inferred: "Inferred pattern" };
 const DIRECT_LABEL: Record<string, string> = { subject_stated: "stated by the firm", reported_by_third_party: "reported by a third party", contributed: "a participant's account", observed_activity: "observed activity", inferred_pattern: "inferred pattern" };
 
 export function CategoryBadge({ value }: { value: SourceCategory }) {
@@ -24,12 +21,12 @@ const isHttps = (u: string | null) => !!u && /^https:\/\//i.test(u);
 
 export function ReconciliationSection({ firmId, canReview, version }: { firmId: string; canReview: boolean; version: number }) {
 	const { data, error, loading, reload } = useLoad(() => call<{ reconciliation: { fields: FieldReconciliation[]; published: { version: number; publishedAt: string } | null; counts: Record<SourceCategory, number> } }>("firm.reconciliation", { firmId }).then((r) => r.reconciliation), [firmId, version]);
-	if (loading && !data) return <Section title="Sources and reconciliation"><Loading what="reconciliation" /></Section>;
+	if (loading && !data) return <Section title="Sources and conflicting information"><Loading what="sources" /></Section>;
 	if (!data) return <ErrorNote error={error} />;
 	return (
-		<Section title="Sources and reconciliation">
-			<p className="muted small">Every claim keeps its own source category, assertion type, age and reviewer decision. There is no single confidence score: read the reasons. Accepting a claim records that a person judged the evidence; it never makes it investor-verified.</p>
-			{data.published ? <div className="note ok" data-testid="published-note">The firm has published an investor-approved profile (version {data.published.version}, {when(data.published.publishedAt)}). Other sources do not override it.</div> : null}
+		<Section title="Sources and conflicting information">
+			<p className="muted small">Every statement keeps its own source, age and reviewer decision. There is no confidence score: read the reasons. Accepting a statement records that a person judged the evidence; it never makes it the firm's own criterion.</p>
+			{data.published ? <div className="note ok" data-testid="published-note">The firm has published its own criteria (version {data.published.version}, {when(data.published.publishedAt)}). Other sources do not override them.</div> : null}
 			<div className="row small" data-testid="category-counts">
 				{(Object.keys(CATEGORY_LABEL) as SourceCategory[]).map((c) => (
 					<span key={c} className={`tag cat-${c}`}>
@@ -48,12 +45,16 @@ export function ReconciliationSection({ firmId, canReview, version }: { firmId: 
 }
 
 function FieldCard({ firmId, f, canReview, reload }: { firmId: string; f: FieldReconciliation; canReview: boolean; reload: () => void }) {
+	// Conflicting information is open until a person resolves it or an approved value settles it. Settled disagreements stay listed, but are not warnings.
+	const open = f.conflicts.filter((c) => !c.resolution && c.reviewState !== "accepted" && c.reviewState !== "rejected");
+	const settled = f.conflicts.filter((c) => !open.includes(c));
 	return (
 		<details className={`criterion recon recon-${f.status}`} open={f.status === "conflicted"} data-testid={`field-${f.field}`}>
 			<summary>
 				<span className="rc-label">{f.field.replace(/_/g, " ")}</span>
-				<span className={`tag recon-status-${f.status}`}>{f.status === "agreed" ? "Independent sources agree" : f.status === "conflicted" ? "Conflicted" : "One source"}</span>
-				{f.conflicts.length ? <span className="flag conflict">{f.conflicts.length} conflict{f.conflicts.length === 1 ? "" : "s"}</span> : null}
+				<span className={`tag recon-status-${f.status}`}>{f.status === "agreed" ? "Independent sources agree" : f.status === "conflicted" ? "Conflicting information" : "One source so far"}</span>
+				{open.length ? <span className="flag conflict">{open.length} open conflict{open.length === 1 ? "" : "s"}</span> : null}
+				{settled.length ? <span className="tag lc-tag-accepted">{settled.length} resolved</span> : null}
 				{f.approved.length ? <span className="tag cat-investor_verified">Approved value stands</span> : null}
 			</summary>
 			<div className="stack">
@@ -62,10 +63,16 @@ function FieldCard({ firmId, f, canReview, reload }: { firmId: string; f: FieldR
 						<li key={e}>{e}</li>
 					))}
 				</ul>
-				{f.conflicts.map((c) => (
+				{open.map((c) => (
 					<div key={c.id} className="note warn" data-testid="conflict">
-						<strong>{c.kind.replace(/_/g, " ")}</strong> ({c.reviewState}): {c.summary}
-						<div className="muted small">{c.reasons.join("; ")}</div>
+						<strong>Conflicting information</strong>: {c.summary}
+						<div className="muted small">{c.reasons.join("; ")}. Nothing was resolved automatically.</div>
+					</div>
+				))}
+				{settled.map((c) => (
+					<div key={c.id} className="note ok" data-testid="resolved-conflict">
+						<strong>Resolved</strong>: {c.summary}
+						<div className="muted small">{c.resolution === "approved_value_stands" ? "The approved value stands; this disagreement is kept for the record." : "A reviewer settled this."}</div>
 					</div>
 				))}
 				<div className="table-wrap">
@@ -113,10 +120,10 @@ function ClaimRow({ firmId, c, canReview, reload }: { firmId: string; c: Reconci
 					<CategoryBadge value={c.signals.category} /> <span className="muted small">{c.publisher}</span>
 				</td>
 				<td>
-					<span className={`tag assert-${c.signals.assertionType}`}>{c.signals.assertionType}</span> <span className="muted small">{DIRECT_LABEL[c.signals.directness]}</span>
+					<span className={`tag assert-${c.signals.assertionType}`}>{ASSERT_LABEL[c.signals.assertionType] ?? c.signals.assertionType}</span> <span className="muted small">{DIRECT_LABEL[c.signals.directness]}</span>
 					<div className="muted small">
-						{c.signals.ageDays} day(s) old{c.signals.freshness === "stale" ? " · stale" : ""}
-						{c.signals.corroboratedBy > 1 ? ` · ${c.signals.corroboratedBy} independent publishers` : ""}
+						{c.signals.ageDays} day(s) old{c.signals.freshness === "stale" ? " · out of date" : ""}
+						{c.signals.corroboratedBy > 1 ? ` · ${c.signals.corroboratedBy} independent publishers (the firm's own site and its representative count as one)` : ""}
 					</div>
 				</td>
 				<td>
@@ -182,11 +189,17 @@ export function ProfileHistorySection({ firmId, version }: { firmId: string; ver
 	);
 }
 
+/** Publishing is for a firm's own representative. A fund team reading research on the same page is never shown the controls (the server enforces it either way). */
+function useIsRepresentative(): boolean {
+	const { principal } = useSession();
+	return useCan("profile.publish") && audienceOf(principal) === "representative";
+}
+
 // ---------------------------------------------------------------------------------------- representative panel on a firm page
 
 type Claim = { claim: { id: string; canonicalDomain: string; firmName: string; challenge: string }; status: string; events: { kind: string; at: string; rationale: string }[] };
 export function RepresentativePanel({ firmId, domain, approvals, reload }: { firmId: string; domain: string; approvals: { id: string; field: string; value: string; kind: string; authority?: string }[]; reload: () => void }) {
-	const can = useCan("profile.publish");
+	const can = useIsRepresentative();
 	const { data } = useLoad(() => (can ? call<{ items: Claim[] }>("profile.claim.mine", {}).then((r) => r.items) : Promise.resolve([])), [can]);
 	const [picked, setPicked] = useState<string[]>([]);
 	const a = useAction();
@@ -194,9 +207,9 @@ export function RepresentativePanel({ firmId, domain, approvals, reload }: { fir
 	const mine = data?.find((c) => c.claim.canonicalDomain === domain);
 	const repApprovals = approvals.filter((x) => x.authority === "firm_representative" && x.kind === "approve");
 	return (
-		<Section title="Your authority over this profile">
+		<Section title="Publishing for the firm">
 			{!mine || mine.status !== "verified" ? (
-				<p className="empty" data-testid="no-authority">You are not a verified representative of this firm{mine ? ` (claim ${mine.status})` : ""}. Approving and publishing criteria needs a moderator-verified claim. Request one under Investors → Claims.</p>
+				<p className="empty" data-testid="no-authority">You are not a verified representative of this firm{mine ? ` (claim ${mine.status})` : ""}. Approving and publishing criteria needs a moderator-verified claim. Request one on the My firm page.</p>
 			) : (
 				<div className="stack" data-testid="authority">
 					<div className="note ok">Verified representative of {mine.claim.firmName}. Approving a criterion below records it as the firm's own; publishing makes exactly the selected ones visible to every workspace.</div>
@@ -209,21 +222,30 @@ export function RepresentativePanel({ firmId, domain, approvals, reload }: { fir
 							))}
 							<ErrorNote error={a.error} />
 							<div className="row">
-								<button
+								<ConfirmButton
+									label="Publish selected criteria"
 									className="primary"
 									disabled={a.busy || !picked.length}
-									onClick={async () => {
+									title="Publish these criteria?"
+									confirmLabel="Publish"
+									consequence={<p>Every workspace will see the {picked.length} selected {picked.length === 1 ? "criterion" : "criteria"} as <strong>Approved by the firm</strong>. Anything not selected stays unpublished. You can publish a new version or withdraw it later; earlier versions stay in the history.</p>}
+									onConfirm={async () => {
 										if (await a.run(() => call("profile.publish", { firmId, approvalIds: picked, note: "" }))) {
 											setPicked([]);
 											reload();
 										}
 									}}
-								>
-									Publish selected criteria
-								</button>
-								<button className="quiet" disabled={a.busy} onClick={async () => (await a.run(() => call("profile.unpublish", { firmId, note: "Withdrawn from the browser." }))) && reload()}>
-									Withdraw published profile
-								</button>
+								/>
+								<ConfirmButton
+									label="Withdraw published profile"
+									className="quiet danger"
+									disabled={a.busy}
+									danger
+									title="Withdraw the published profile?"
+									confirmLabel="Withdraw"
+									consequence={<p>Other workspaces stop seeing your firm's criteria as approved, and investors fall back to public research. The published versions stay in the history and you can publish again.</p>}
+									onConfirm={async () => (await a.run(() => call("profile.unpublish", { firmId, note: "Withdrawn from the browser." }))) && reload()}
+								/>
 							</div>
 						</>
 					) : (
@@ -236,7 +258,7 @@ export function RepresentativePanel({ firmId, domain, approvals, reload }: { fir
 }
 
 export function ApproveAsFirmButton({ firmId, criterionId, domain, reload }: { firmId: string; criterionId: string; domain: string; reload: () => void }) {
-	const can = useCan("profile.publish");
+	const can = useIsRepresentative();
 	const { data } = useLoad(() => (can ? call<{ items: Claim[] }>("profile.claim.mine", {}).then((r) => r.items) : Promise.resolve([])), [can]);
 	const [note, setNote] = useState("");
 	const [open, setOpen] = useState(false);

@@ -47,7 +47,7 @@ export const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 	// A fund partner administers their own workspace. Verifying who may represent a firm is a platform duty, never a fund's.
 	partner: ALL_PERMISSIONS.filter((p) => p !== "moderation.review"),
 	// A founder works in their own workspace: keeps a private startup profile and evidence, evaluates investor fit, reads the public directory, and chooses what to share.
-	founder: ["invest.read", "contribution.write", "contribution.share", "startup.write", "document.write", "evidence.write", "evaluation.run"],
+	founder: ["invest.read", "contribution.write", "contribution.share", "startup.write", "document.write", "evaluation.run"],
 	// A firm representative can ask to represent a firm; approval and publishing only work once a moderator has verified the claim.
 	investor_rep: ["invest.read", "audit.read", "review.write", "research.run", "profile.claim", "profile.publish", "contribution.read_shared"],
 	// A moderator verifies representative claims, resolves matches and reviews proposals across workspaces. No access to private notes.

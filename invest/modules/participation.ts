@@ -168,6 +168,8 @@ export class ParticipationModule {
 		const kind = input.decision === "verify" ? "verified" : input.decision === "reject" ? "rejected" : "revoked";
 		const ev: ClaimEvent = { id: newSortableId("ce"), workspaceId: claim.workspaceId, claimId: claim.id, kind, actorId: actor.principalId, rationale, data: { evidence, proofOk: events.some((e) => e.kind === "proof_checked" && e.data?.proofOk) }, at: this.store.now() };
 		await this.store.commit(this.onBehalf(actor, claim.workspaceId), { writes: [{ collection: C.claimEvents, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: `claim.${kind}`, entityRef: { type: "representative_claim", id: claim.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, principal: claim.principalId, rationale, evidence: evidence.length } }] });
+		// The decision is recorded in the claimant's workspace (where the claim lives) and again in the moderator's own history, so who decided what is visible to both.
+		await this.store.commit(actor, { writes: [], audit: [{ eventType: "moderation.claim_decided", entityRef: { type: "representative_claim", id: claim.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, firmName: claim.firmName, decision: kind, rationale, evidence: evidence.length } }] });
 		return ev;
 	}
 

@@ -1,29 +1,18 @@
 import { type FormEvent, useState } from "react";
 import { RESEARCH_STATUSES, type AttentionItem, type CriterionView, type FirmListItem, type FirmProfile, type MonitoringTarget, type ResearchSource, type ResearchStatus, type TimelineItem } from "../../../../invest/domain/research.ts";
 import { call } from "../api.ts";
-import { ErrorNote, Loading, PageHead, Section, href, useAction, useCan, useLoad, when } from "../ui.tsx";
+import { RESEARCH } from "../vocab.ts";
+import { Badge, EmptyState, ErrorNote, Loading, PageHead, Section, href, useAction, useCan, useLoad, when } from "../ui.tsx";
 import { ApproveAsFirmButton, ContributionForm, ProfileHistorySection, ReconciliationSection, RepresentativePanel } from "./Collaboration.tsx";
-import { ClaimsPanel, ContributionsPanel, InboxPanel, SourcesPanel } from "./Hub.tsx";
 
-const STATUS_LABEL: Record<ResearchStatus, string> = {
-	pending: "Not researched yet",
-	thesis_found: "Thesis found",
-	no_thesis_found: "No thesis found in this research",
-	research_incomplete: "Research incomplete",
-};
-const STATUS_HELP: Record<ResearchStatus, string> = {
-	pending: "A profile exists but no research has run.",
-	thesis_found: "At least one explicit criterion was found in the firm's own public pages.",
-	no_thesis_found: "The pages that could be read declared no criteria. This does not mean the firm has none.",
-	research_incomplete: "Research was blocked, failed or could not cover enough of the site. Nothing can be concluded.",
-};
+const STATUS_LABEL: Record<ResearchStatus, string> = Object.fromEntries(Object.entries(RESEARCH).map(([k, v]) => [k, v.label])) as Record<ResearchStatus, string>;
 const ASSERTION_TITLE = {
-	explicit: { title: "Stated by the firm", help: "Taken from a statement on the firm's own pages." },
-	observed: { title: "Observed from announcements", help: "What the firm did in a past financing. Not a statement of what it targets." },
-	inferred: { title: "Inferred from portfolio patterns", help: "A pattern across past investments. Not the firm's declared policy." },
+	explicit: { title: "Stated on the firm's own site", help: "Read from the firm's public pages. Pages can be out of date, and nothing here is the firm's own criterion until an authorised person approves it." },
+	observed: { title: "External observations", help: "What the firm did in past deals. It says nothing about what the firm targets." },
+	inferred: { title: "Inferred patterns", help: "A pattern across past investments. Never the firm's declared policy." },
 } as const;
 const VERIFICATION_LABEL: Record<string, string> = {
-	pending: "Source check pending",
+	pending: "Source not yet checked",
 	source_supports: "Passage supports the statement",
 	source_does_not_support: "Passage does not support the statement",
 	inconclusive: "Source check inconclusive",
@@ -45,11 +34,7 @@ const OUTCOME_LABEL: Record<string, string> = {
 const SOURCE_CLASS_LABEL: Record<string, string> = { official_website: "Official website", official_publication: "Official publication", third_party: "Third party", other: "Other" };
 
 export function StatusBadge({ status }: { status: ResearchStatus }) {
-	return (
-		<span className={`rstatus ${status}`} title={STATUS_HELP[status]}>
-			{STATUS_LABEL[status]}
-		</span>
-	);
+	return <Badge entry={RESEARCH[status]} />;
 }
 
 const usd = (n: number) => (n >= 1e6 ? `$${n / 1e6}M` : n >= 1e3 ? `$${n / 1e3}K` : `$${n}`);
@@ -65,27 +50,12 @@ function UrlText({ url }: { url: string }) {
 	);
 }
 
-const TABS = [
-	{ id: "directory", label: "Directory" },
-	{ id: "inbox", label: "Inbox" },
-	{ id: "sources", label: "Sources" },
-	{ id: "claims", label: "Claims & published profiles" },
-	{ id: "contributions", label: "Contributions" },
-] as const;
-
+/** Investor research: the firms this workspace researches. Source operations live under Operations; claims and decisions have their own pages. */
 export function InvestorsScreen() {
-	const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("directory");
 	return (
 		<>
-			<PageHead title="Investors" sub="Public-source research on venture firms, curated sources, and what firms and founders contribute. Findings here are not investor-approved theses." />
-			<div className="tabs" role="tablist" aria-label="Investor intelligence">
-				{TABS.map((t) => (
-					<button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
-						{t.label}
-					</button>
-				))}
-			</div>
-			{tab === "directory" ? <DirectoryTab /> : tab === "inbox" ? <InboxPanel /> : tab === "sources" ? <SourcesPanel /> : tab === "claims" ? <ClaimsPanel /> : <ContributionsPanel />}
+			<PageHead title="Investor research" sub="Public-source research on venture firms. Findings are research, not the firm's own criteria; only criteria marked approved are." />
+			<DirectoryTab />
 		</>
 	);
 }
@@ -166,7 +136,7 @@ function DirectoryTab() {
 					</table>
 				</div>
 			) : data ? (
-				<p className="empty">{query || status ? "No firms match." : "No firms yet. Run the research pipeline: bun run research -- <file> --workspace <id>."}</p>
+				<EmptyState title={query || status ? "No firms match these filters" : "No firms are being researched yet"}>{query || status ? "Clear the search or the research filter." : "Firms appear here once research is run for them. An operator adds firms with the research command (see the README); a representative's own firm is added when they claim it."}</EmptyState>
 			) : null}
 		</>
 	);
@@ -230,9 +200,9 @@ function CriterionRow({ firmId, c, canReview, canApprove, reload, domain }: { fi
 					{c.label}
 				</span>
 				<span className="muted small">{c.field.replace(/_/g, " ")}</span>
-				<span className={`tag assert-${c.assertionType}`}>{c.assertionType}</span>
+				<span className={`tag assert-${c.assertionType}`}>{({ explicit: "Stated", observed: "Seen in past activity", inferred: "Inferred pattern" } as Record<string, string>)[c.assertionType] ?? c.assertionType}</span>
 				<span className={`tag verif-${c.verification}`}>{c.verificationApplicable ? VERIFICATION_LABEL[c.verification] : "Not checkable from one passage"}</span>
-				{c.freshness === "stale" ? <span className="flag stale">Stale</span> : null}
+				{c.freshness === "stale" ? <span className="flag stale">Out of date</span> : null}
 				{c.reviews.length ? <span className="flag">{c.reviews.length} review{c.reviews.length === 1 ? "" : "s"}</span> : null}
 			</summary>
 			<div className="stack">
@@ -420,20 +390,8 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 				</div>
 			) : null}
 
-			{p.conflicts.length ? (
-				<Section title={`Conflicts to review (${p.conflicts.length})`}>
-					<ul className="timeline" data-testid="conflicts">
-						{p.conflicts.map((c) => (
-							<li key={c.kind + c.criterionIds.join()}>
-								{c.message} <span className="muted small">({c.criterionIds.map(criterionLabel).join("; ")}{c.approvalIds.length ? "; conflicts with an investor-approved value" : ""})</span>
-							</li>
-						))}
-					</ul>
-					<p className="muted small">Nothing was resolved automatically. Neither side is assumed correct.</p>
-				</Section>
-			) : null}
-
 			<Section title="Approved criteria">
+				<p className="muted small">Only these are criteria someone with authority stands behind. Everything below is research.</p>
 				{p.approvedCurrent.length ? (
 					<ul className="timeline">
 						{p.approvedCurrent.map((a) => (
@@ -453,6 +411,8 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 				)}
 			</Section>
 
+			<RepresentativePanel firmId={firmId} domain={p.firm.canonicalDomain} approvals={p.approvals} reload={reloadAll} />
+
 			{groups.map(({ k, items }) =>
 				items.length ? (
 					<Section key={k} title={`${ASSERTION_TITLE[k].title} (${items.length})`}>
@@ -468,7 +428,6 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 			{!p.criteria.length && !p.stub ? <p className="empty">No criteria in the latest run.</p> : null}
 
 			<ReconciliationSection firmId={firmId} canReview={canReview} version={p.runs.length + p.findings.length + p.events.length + p.reviews.length + p.approvals.length + bump} />
-			<RepresentativePanel firmId={firmId} domain={p.firm.canonicalDomain} approvals={p.approvals} reload={reloadAll} />
 			<ProfileHistorySection firmId={firmId} version={p.approvals.length + bump} />
 			<Section title="Contribute">
 				<p className="muted small">Add a correction, firsthand knowledge or a note about this firm. It stays private to your workspace until you share it.</p>
@@ -477,6 +436,8 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 			<MonitoringSection p={p} canRun={canRun} reload={reload} />
 			<TimelineSection firmId={firmId} canReview={canReview} version={p.runs.length + p.findings.length + p.events.length + p.reviews.length} reload={reload} />
 
+			<details className="ops-details" data-testid="research-details">
+			<summary>Research details: pages read, research runs and earlier findings</summary>
 			<Section title={`Sources checked (${p.runs[0]?.checks.length ?? 0} in the latest run)`}>
 				{p.sources.length ? (
 					<div className="table-wrap">
@@ -538,6 +499,7 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 					</div>
 				</Section>
 			) : null}
+			</details>
 		</>
 	);
 }
@@ -570,7 +532,7 @@ const ATTENTION_TITLE: Record<AttentionItem["kind"], string> = {
 };
 
 /** Four different things, never blended: activity, strategy, review queue, and research health. */
-function AttentionPanel({ items }: { items: AttentionItem[] }) {
+export function AttentionPanel({ items }: { items: AttentionItem[] }) {
 	if (!items.length) return null;
 	const kinds = Object.keys(ATTENTION_TITLE) as AttentionItem["kind"][];
 	return (
