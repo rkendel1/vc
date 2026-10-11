@@ -1,4 +1,4 @@
-import { newId, sha256Hex } from "../domain/canonical.ts";
+import { newId, newSortableId, sha256Hex } from "../domain/canonical.ts";
 import { conflict, forbidden, invalid, notFound, precondition } from "../domain/errors.ts";
 import {
 	ACCESS_BASES,
@@ -209,7 +209,7 @@ export class SourceIngestionModule {
 			this.store.list<SourceRecord>(C.sourceRecords, ws, { sourceId }),
 			this.store.get<MonitoringTarget>(C.monitoringTargets, sourceId, ws),
 		]);
-		runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+		runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
 		const latest = new Map<string, SourceRecord>();
 		for (const r of records) if (!latest.has(r.identity) || latest.get(r.identity)!.version < r.version) latest.set(r.identity, r);
 		const matches = await this.store.list<EntityMatch>(C.entityMatches, ws);
@@ -225,7 +225,7 @@ export class SourceIngestionModule {
 		const target = new Map(targets.filter((t) => t.kind === "source").map((t) => [t.id, t]));
 		return sources
 			.map((s) => {
-				const mine = runs.filter((r) => r.sourceId === s.id).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+				const mine = runs.filter((r) => r.sourceId === s.id).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
 				return { source: s, target: target.get(s.id) ?? null, lastRun: mine[0] ?? null, lastSuccessfulRun: mine.find((r) => r.success) ?? null };
 			})
 			.sort((a, b) => a.source.name.localeCompare(b.source.name));
@@ -239,7 +239,7 @@ export class SourceIngestionModule {
 		const recent = (await this.store.list<SourceRun>(C.sourceRuns, actor.workspaceId, { sourceId })).find((r) => r.status === "running" && Date.parse(r.startedAt) > Date.parse(this.store.now()) - RUNNING_WINDOW_MS);
 		if (recent || this.inflight.has(sourceId)) throw precondition("This source is already being retrieved");
 		const prior = await this.store.list<SourceSnapshot>(C.sourceSnapshots, actor.workspaceId, { sourceId });
-		const run: SourceRun = { id: newId("sr"), workspaceId: actor.workspaceId, sourceId, status: "running", startedAt: this.store.now(), completedAt: null, startedBy: actor.principalId, adapter: source.adapter, adapterVersion: ADAPTER_VERSION, fetchOutcome: null, snapshotId: null, change: null, success: false, counts: { records: 0, newRecords: 0, changedRecords: 0, matched: 0, candidates: 0, unmatched: 0, claims: 0, events: 0, errors: 0 }, errors: [], error: null, baseline: prior.length === 0 };
+		const run: SourceRun = { id: newSortableId("sr"), workspaceId: actor.workspaceId, sourceId, status: "running", startedAt: this.store.now(), completedAt: null, startedBy: actor.principalId, adapter: source.adapter, adapterVersion: ADAPTER_VERSION, fetchOutcome: null, snapshotId: null, change: null, success: false, counts: { records: 0, newRecords: 0, changedRecords: 0, matched: 0, candidates: 0, unmatched: 0, claims: 0, events: 0, errors: 0 }, errors: [], error: null, baseline: prior.length === 0 };
 		await this.store.commit(actor, { writes: [{ collection: C.sourceRuns, id: run.id, value: run as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: "source.run_started", entityRef: { type: "source_run", id: run.id }, payload: { sourceId, runId: run.id, adapter: source.adapter } }] });
 		return { source, run: (await this.store.get<SourceRun>(C.sourceRuns, run.id, actor.workspaceId))! };
 	}
@@ -544,7 +544,7 @@ export class SourceIngestionModule {
 		if (!known) throw invalid("The entity is not one of this match's candidates");
 		if (input.entity.type === "firm" ? !(await this.store.get(C.firms, input.entity.id, actor.workspaceId)) : !(await this.store.get(C.entities, input.entity.id, actor.workspaceId))) throw notFound("Entity");
 		const record = await this.store.get<SourceRecord>(C.sourceRecords, match.recordId, actor.workspaceId);
-		const decision: MatchDecision = { id: newId("md"), workspaceId: actor.workspaceId, matchId: match.id, recordId: record?.identity ?? match.recordId, decision: input.decision, entity: input.entity, rationale, evidenceRecordIds: [match.recordId], decidedBy: actor.principalId, decidedAt: this.store.now(), subjectName: match.subjectName };
+		const decision: MatchDecision = { id: newSortableId("md"), workspaceId: actor.workspaceId, matchId: match.id, recordId: record?.identity ?? match.recordId, decision: input.decision, entity: input.entity, rationale, evidenceRecordIds: [match.recordId], decidedBy: actor.principalId, decidedAt: this.store.now(), subjectName: match.subjectName };
 		const writes: StoreWrite[] = [{ collection: C.matchDecisions, id: decision.id, value: decision as unknown as Record<string, unknown>, create: true }];
 		const audit = [{ eventType: input.decision === "confirm" ? "match.confirmed" : "match.rejected", entityRef: { type: "entity_match", id: match.id }, payload: { matchId: match.id, recordId: match.recordId, name: match.subjectName, entity: refKey(input.entity), rationale } }];
 		// A confirmed firm match teaches the firm the alias; nothing is merged and nothing is deleted.

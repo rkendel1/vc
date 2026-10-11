@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { newId, sha256Hex } from "../domain/canonical.ts";
+import { newId, newSortableId, sha256Hex } from "../domain/canonical.ts";
 import { conflict, forbidden, invalid, notFound, precondition } from "../domain/errors.ts";
 import {
 	type ClaimEvent,
@@ -92,7 +92,7 @@ export class ParticipationModule {
 		if (existing) return { claim: existing, status: claimStatusOf(await this.eventsOf(actor.workspaceId, id)) };
 		const now = this.store.now();
 		const claim: RepresentativeClaim = { id, workspaceId: actor.workspaceId, principalId: actor.principalId, canonicalDomain: domain, firmName, relationship, challenge: `attn-invest-claim:${randomBytes(18).toString("hex")}`, requestedAt: now };
-		const ev: ClaimEvent = { id: newId("ce"), workspaceId: actor.workspaceId, claimId: id, kind: "requested", actorId: actor.principalId, rationale: relationship, data: null, at: now };
+		const ev: ClaimEvent = { id: newSortableId("ce"), workspaceId: actor.workspaceId, claimId: id, kind: "requested", actorId: actor.principalId, rationale: relationship, data: null, at: now };
 		try {
 			await this.store.commit(actor, {
 				writes: [
@@ -116,7 +116,7 @@ export class ParticipationModule {
 		const claims = (await this.store.list<RepresentativeClaim>(C.representativeClaims, actor.workspaceId)).filter((c) => c.principalId === actor.principalId);
 		const out = [];
 		for (const c of claims) {
-			const events = (await this.eventsOf(actor.workspaceId, c.id)).sort((a, b) => a.at.localeCompare(b.at));
+			const events = (await this.eventsOf(actor.workspaceId, c.id)).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 			out.push({ claim: c, status: claimStatusOf(events), events: events.map(({ data, ...rest }) => ({ ...rest, data })) });
 		}
 		return out.sort((a, b) => a.claim.canonicalDomain.localeCompare(b.claim.canonicalDomain));
@@ -130,7 +130,7 @@ export class ParticipationModule {
 		const res = await fetcher.fetchPage(`https://${claim.canonicalDomain}${WELL_KNOWN}`);
 		const ok = res.outcome === "ok" && typeof res.body === "string" && res.body.trim() === claim.challenge;
 		const detail = ok ? "The challenge was found at the well-known path." : res.outcome === "ok" ? "The file does not contain this claim's challenge." : `The proof file could not be read (${res.outcome}${res.detail ? `: ${res.detail}` : ""}).`;
-		const ev: ClaimEvent = { id: newId("ce"), workspaceId: actor.workspaceId, claimId, kind: "proof_checked", actorId: actor.principalId, rationale: detail, data: { proofOk: ok, proofDetail: detail }, at: this.store.now() };
+		const ev: ClaimEvent = { id: newSortableId("ce"), workspaceId: actor.workspaceId, claimId, kind: "proof_checked", actorId: actor.principalId, rationale: detail, data: { proofOk: ok, proofDetail: detail }, at: this.store.now() };
 		await this.store.commit(actor, { writes: [{ collection: C.claimEvents, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: "claim.proof_checked", entityRef: { type: "representative_claim", id: claimId }, payload: { claimId, domain: claim.canonicalDomain, ok } }] });
 		return ev;
 	}
@@ -142,7 +142,7 @@ export class ParticipationModule {
 		const events = await this.store.scanAll<ClaimEvent>(C.claimEvents);
 		return claims
 			.map((c) => {
-				const mine = events.filter((e) => e.claimId === c.id).sort((a, b) => a.at.localeCompare(b.at));
+				const mine = events.filter((e) => e.claimId === c.id).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 				return { claim: { ...c, challenge: undefined as never }, status: claimStatusOf(mine), proof: [...mine].reverse().find((e) => e.kind === "proof_checked")?.data ?? null, events: mine };
 			})
 			.filter((c) => c.status === "requested")
@@ -166,7 +166,7 @@ export class ParticipationModule {
 		if (input.decision === "revoke" && status !== "verified") throw precondition("Only a verified claim can be revoked");
 		if (input.decision === "reject" && status === "verified") throw precondition("Revoke a verified claim instead of rejecting it");
 		const kind = input.decision === "verify" ? "verified" : input.decision === "reject" ? "rejected" : "revoked";
-		const ev: ClaimEvent = { id: newId("ce"), workspaceId: claim.workspaceId, claimId: claim.id, kind, actorId: actor.principalId, rationale, data: { evidence, proofOk: events.some((e) => e.kind === "proof_checked" && e.data?.proofOk) }, at: this.store.now() };
+		const ev: ClaimEvent = { id: newSortableId("ce"), workspaceId: claim.workspaceId, claimId: claim.id, kind, actorId: actor.principalId, rationale, data: { evidence, proofOk: events.some((e) => e.kind === "proof_checked" && e.data?.proofOk) }, at: this.store.now() };
 		await this.store.commit(this.onBehalf(actor, claim.workspaceId), { writes: [{ collection: C.claimEvents, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: `claim.${kind}`, entityRef: { type: "representative_claim", id: claim.id }, payload: { claimId: claim.id, domain: claim.canonicalDomain, principal: claim.principalId, rationale, evidence: evidence.length } }] });
 		return ev;
 	}
@@ -234,7 +234,9 @@ export class ParticipationModule {
 	/** What a firm has chosen to publish: readable by every workspace, current version only. */
 	async publishedFor(domain: string): Promise<PublishedProfile | null> {
 		const latest = (await this.store.scanAll<PublishedProfile>(C.publishedProfiles)).filter((p) => p.canonicalDomain === domain).sort((a, b) => b.version - a.version)[0];
-		return latest && !latest.withdrawn ? latest : null;
+		if (!latest || latest.withdrawn) return null;
+		const { __version: _v, ...rest } = latest as PublishedProfile & { __version?: number };
+		return rest;
 	}
 
 	async directory(): Promise<{ canonicalDomain: string; firmName: string; version: number; publishedAt: string; criteriaCount: number }[]> {
@@ -349,7 +351,7 @@ export class ParticipationModule {
 			}
 			if (audience.domain !== versions.at(-1)!.firmDomain) throw invalid("A contribution can only be shared with the firm it is about");
 		} else if (audience.kind !== "moderator") throw invalid("Unknown audience");
-		const ev: ContributionShare = { id: newId("cs"), workspaceId: actor.workspaceId, chainId: input.chainId, event: "share", audience, aggregateConsent: input.aggregateConsent === true, note: (input.note ?? "").trim().slice(0, 500), actorId: actor.principalId, at: this.store.now() };
+		const ev: ContributionShare = { id: newSortableId("cs"), workspaceId: actor.workspaceId, chainId: input.chainId, event: "share", audience, aggregateConsent: input.aggregateConsent === true, note: (input.note ?? "").trim().slice(0, 500), actorId: actor.principalId, at: this.store.now() };
 		await this.store.commit(actor, { writes: [{ collection: C.contributionShares, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: "contribution.shared", entityRef: { type: "contribution", id: input.chainId }, payload: { chainId: input.chainId, audience, aggregateConsent: ev.aggregateConsent } }] });
 		return ev;
 	}
@@ -361,7 +363,7 @@ export class ParticipationModule {
 		const audience: ShareAudience = input.audience.kind === "firm" ? { kind: "firm", domain: input.audience.domain.toLowerCase() } : { kind: "moderator" };
 		const active = this.activeShares(await this.sharesOf(actor.workspaceId, input.chainId));
 		if (!active.some((e) => JSON.stringify(e.audience) === JSON.stringify(audience))) throw precondition("This contribution is not shared with that audience");
-		const ev: ContributionShare = { id: newId("cs"), workspaceId: actor.workspaceId, chainId: input.chainId, event: "revoke", audience, aggregateConsent: false, note: "", actorId: actor.principalId, at: this.store.now() };
+		const ev: ContributionShare = { id: newSortableId("cs"), workspaceId: actor.workspaceId, chainId: input.chainId, event: "revoke", audience, aggregateConsent: false, note: "", actorId: actor.principalId, at: this.store.now() };
 		await this.store.commit(actor, { writes: [{ collection: C.contributionShares, id: ev.id, value: ev as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: "contribution.share_revoked", entityRef: { type: "contribution", id: input.chainId }, payload: { chainId: input.chainId, audience } }] });
 		return ev;
 	}
@@ -462,7 +464,7 @@ export class ParticipationModule {
 			visible = (await this.sharedTo((a) => a.kind === "firm" && a.domain === c.firmDomain)).some((x) => x.contribution.chainId === input.chainId);
 		}
 		if (!visible) throw notFound("Contribution"); // not shared with you, or the share was revoked
-		const rec: ContributionResponse = { id: newId("cr"), workspaceId: actor.workspaceId, chainId: input.chainId, domain: c.firmDomain, authorWorkspaceId: c.workspaceId, action: input.action, note, responderKind: input.as, actorId: actor.principalId, at: this.store.now() };
+		const rec: ContributionResponse = { id: newSortableId("cr"), workspaceId: actor.workspaceId, chainId: input.chainId, domain: c.firmDomain, authorWorkspaceId: c.workspaceId, action: input.action, note, responderKind: input.as, actorId: actor.principalId, at: this.store.now() };
 		await this.store.commit(actor, { writes: [{ collection: C.contributionResponses, id: rec.id, value: rec as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: "contribution.responded", entityRef: { type: "contribution", id: input.chainId }, payload: { chainId: input.chainId, action: input.action, as: input.as, domain: c.firmDomain } }] });
 		return rec;
 	}

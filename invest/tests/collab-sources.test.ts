@@ -99,7 +99,7 @@ describe("entity resolution (pure)", () => {
 		const clash = resolve({ ...base, name: "X", domain: "acme.vc", externalId: "7", aliases: ["BP"] }, pool);
 		expect(clash.status).toBe("candidate_match");
 		expect(clash.reasons[0]).toContain("more than one entity");
-		expect(resolve({ ...base, name: "Acme Capital", domain: "acme.vc" }, pool, new Set(["firm:f1"])).status).toBe("candidate_match" === "x" ? "x" : "unmatched"); // a rejected pairing is not proposed again
+		expect(resolve({ ...base, name: "Acme Capital", domain: "acme.vc" }, pool, new Set(["firm:f1"])).status).toBe("unmatched"); // a rejected pairing is not proposed again
 	});
 	it("keeps investors and companies apart", () => {
 		const co: PoolEntity = { ref: { type: "entity", id: "e1" }, kind: "company", name: "Acme", key: "acme", domain: "acme.com", aliasKeys: [], confirmedAliasKeys: [], externalIds: [] };
@@ -401,7 +401,7 @@ describe("reconciliation", () => {
 		const st = r.find((f) => f.field === "stage")!;
 		expect(st.conflicts).toEqual([]);
 		expect(st.claims.find((c) => c.key === "claim:b")!.reasons.join()).toContain("observed from past activity");
-		expect(st.claims.find((c) => c.key === "claim:c")!.signals.corroboratedBy).toBe(0 + 1 - 1 + 1 - 1 + (0 as number) + 1 - 1 === 0 ? st.claims.find((c) => c.key === "claim:c")!.signals.corroboratedBy : 0);
+		expect(st.claims.find((c) => c.key === "claim:c")!.signals.corroboratedBy).toBe(0); // an inferred pattern is never counted as independent corroboration
 	});
 	it("never lets any number of sources override an approved value; the conflict stays open until an authorised change", () => {
 		const approved = [{ id: "ap1", field: "check_size" as const, polarity: "include" as const, value: "usd_1000000_2000000", valueRange: { minUsd: 1_000_000, maxUsd: 2_000_000 }, authority: "firm_representative" as const }];

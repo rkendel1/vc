@@ -79,13 +79,13 @@ export class ReconciliationModule {
 		for (const cl of claims) {
 			const rec = cl.origin.sourceRecordId ? sourceRecords.get(cl.origin.sourceRecordId) : null;
 			const newest = rec ? latestByIdentity.get(`${rec.sourceId}|${rec.identity}`) : null;
-			const rs = reviews.filter((r) => r.claimId === cl.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+			const rs = reviews.filter((r) => r.claimId === cl.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
 			inClaims.push({ ref: { kind: "claim", id: cl.id }, field: cl.field, polarity: cl.polarity, value: cl.value, valueRange: cl.valueRange, label: cl.label, category: cl.category, assertionType: cl.assertionType, publisher: cl.publisher, passage: cl.passage, url: rec?.sourceUrl ?? null, publishedAt: cl.publishedAt, capturedAt: cl.capturedAt, lifecycle: lifecycleOf(reviewStateOf(rs, "unreviewed")), supersededBy: newest && rec && newest.id !== rec.id ? newest.id : null });
 		}
 
 		for (const ct of ownContribs) {
 			const c = ct.claim!;
-			const rs = responses.filter((r) => r.chainId === ct.chainId && r.authorWorkspaceId === ws).sort((a, b) => b.at.localeCompare(a.at));
+			const rs = responses.filter((r) => r.chainId === ct.chainId && r.authorWorkspaceId === ws).sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
 			const decisive = rs.find((r) => r.action !== "note");
 			const lifecycle: LifecycleState = !decisive ? "proposed" : decisive.action === "confirm" ? "accepted" : decisive.action === "dismiss" ? "rejected" : decisive.action === "dispute" ? "disputed" : "needs_review";
 			inClaims.push({ ref: { kind: "contribution", id: ct.id }, field: c.field, polarity: c.polarity, value: c.value, valueRange: c.valueRange, label: c.valueRange ? c.value : c.value.replace(/_/g, " "), category: ct.category, assertionType: "explicit", publisher: `contributor:${ct.authorId}`, passage: ct.text, url: ct.evidenceUrls[0] ?? null, publishedAt: null, capturedAt: ct.createdAt, lifecycle, supersededBy: null });
