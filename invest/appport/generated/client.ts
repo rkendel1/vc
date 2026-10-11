@@ -55,6 +55,145 @@ export type AuditListV1Output = {
 export type AuditListInput = AuditListV1Input;
 export type AuditListOutput = AuditListV1Output;
 
+/** Representative claims awaiting a moderator decision, across workspaces. Challenges are not included. */
+export type ClaimPendingV1Input = Record<string, never>;
+export type ClaimPendingV1Output = {
+  items: unknown;
+};
+
+export type ClaimPendingInput = ClaimPendingV1Input;
+export type ClaimPendingOutput = ClaimPendingV1Output;
+
+/** A moderator verifies, rejects or revokes a representative claim, with a rationale and the evidence considered. Verification needs a successful domain proof or documented evidence. */
+export type ClaimReviewV1Input = {
+  claimId: string;
+  decision: "verify" | "reject" | "revoke";
+  rationale: string;
+  evidence?: Array<string>;
+};
+export type ClaimReviewV1Output = {
+  event: unknown;
+};
+
+export type ClaimReviewInput = ClaimReviewV1Input;
+export type ClaimReviewOutput = ClaimReviewV1Output;
+
+/** Records a private contribution about a firm: a correction, firsthand note, outdated-criterion flag, suggested relationship or interaction note. Private to the author's workspace until shared. */
+export type ContributionCreateV1Input = {
+  kind: "correction" | "firsthand_note" | "flag_outdated" | "suggest_relationship" | "interaction_note";
+  firmDomain: string;
+  field?: "stage" | "sector" | "geography" | "check_size" | "business_model" | "company_characteristics" | "exclusion" | "traction" | "application_requirements";
+  polarity?: "include" | "exclude";
+  value?: string;
+  minUsd?: number;
+  maxUsd?: number;
+  text: string;
+  evidenceUrls?: Array<string>;
+};
+export type ContributionCreateV1Output = {
+  contribution: unknown;
+};
+
+export type ContributionCreateInput = ContributionCreateV1Input;
+export type ContributionCreateOutput = ContributionCreateV1Output;
+
+/** Edits a contribution by creating a new version; earlier versions stay. */
+export type ContributionEditV1Input = {
+  chainId: string;
+  kind: "correction" | "firsthand_note" | "flag_outdated" | "suggest_relationship" | "interaction_note";
+  firmDomain: string;
+  field?: "stage" | "sector" | "geography" | "check_size" | "business_model" | "company_characteristics" | "exclusion" | "traction" | "application_requirements";
+  polarity?: "include" | "exclude";
+  value?: string;
+  minUsd?: number;
+  maxUsd?: number;
+  text: string;
+  evidenceUrls?: Array<string>;
+};
+export type ContributionEditV1Output = {
+  contribution: unknown;
+};
+
+export type ContributionEditInput = ContributionEditV1Input;
+export type ContributionEditOutput = ContributionEditV1Output;
+
+/** The caller's own contributions with sharing state, share history and the responses received. */
+export type ContributionMineV1Input = {
+  firmDomain?: string;
+};
+export type ContributionMineV1Output = {
+  items: unknown;
+};
+
+export type ContributionMineInput = ContributionMineV1Input;
+export type ContributionMineOutput = ContributionMineV1Output;
+
+/** Contributions authors chose to share with moderators. */
+export type ContributionQueueV1Input = Record<string, never>;
+export type ContributionQueueV1Output = {
+  items: unknown;
+};
+
+export type ContributionQueueInput = ContributionQueueV1Input;
+export type ContributionQueueOutput = ContributionQueueV1Output;
+
+/** A verified representative or moderator responds to a shared contribution. A dispute is recorded beside the contribution; it never edits or deletes it. */
+export type ContributionRespondV1Input = {
+  chainId: string;
+  action: "confirm" | "dispute" | "dismiss" | "flag" | "note";
+  note: string;
+  as: "firm_representative" | "moderator";
+};
+export type ContributionRespondV1Output = {
+  response: unknown;
+};
+
+export type ContributionRespondInput = ContributionRespondV1Input;
+export type ContributionRespondOutput = ContributionRespondV1Output;
+
+/** Revokes sharing for one audience. The receiver can no longer read it; their earlier responses remain. */
+export type ContributionRevokeV1Input = {
+  chainId: string;
+  audience: {
+    kind: "firm" | "moderator";
+    domain?: string;
+  };
+};
+export type ContributionRevokeV1Output = {
+  share: unknown;
+};
+
+export type ContributionRevokeInput = ContributionRevokeV1Input;
+export type ContributionRevokeOutput = ContributionRevokeV1Output;
+
+/** Shares a contribution with the firm it is about, or with moderators. Sharing is consent for that audience only; it is not publishing. Aggregate-analysis consent is a separate, explicit flag. */
+export type ContributionShareV1Input = {
+  chainId: string;
+  audience: {
+    kind: "firm" | "moderator";
+    domain?: string;
+  };
+  aggregateConsent?: boolean;
+  note?: string;
+};
+export type ContributionShareV1Output = {
+  share: unknown;
+};
+
+export type ContributionShareInput = ContributionShareV1Input;
+export type ContributionShareOutput = ContributionShareV1Output;
+
+/** Contributions authors shared with the firm. Only a verified representative of that firm can read them; authors are not identified. */
+export type ContributionSharedV1Input = {
+  domain: string;
+};
+export type ContributionSharedV1Output = {
+  items: unknown;
+};
+
+export type ContributionSharedInput = ContributionSharedV1Input;
+export type ContributionSharedOutput = ContributionSharedV1Output;
+
 /** Records an investment decision. Invest requires every review gate resolved and no failed or unresolved hard gate. */
 export type DecisionRecordV1Input = {
   evaluationId: string;
@@ -68,6 +207,26 @@ export type DecisionRecordV1Output = {
 
 export type DecisionRecordInput = DecisionRecordV1Input;
 export type DecisionRecordOutput = DecisionRecordV1Output;
+
+/** A firm's published profile for a domain, or null. */
+export type DirectoryGetV1Input = {
+  domain: string;
+};
+export type DirectoryGetV1Output = {
+  profile: unknown;
+};
+
+export type DirectoryGetInput = DirectoryGetV1Input;
+export type DirectoryGetOutput = DirectoryGetV1Output;
+
+/** Firms that have published an investor-approved profile (current versions only). The one place a workspace reads another workspace's data, and only what a verified representative chose to publish. */
+export type DirectoryListV1Input = Record<string, never>;
+export type DirectoryListV1Output = {
+  items: unknown;
+};
+
+export type DirectoryListInput = DirectoryListV1Input;
+export type DirectoryListOutput = DirectoryListV1Output;
 
 /** Ingestion status, issues, hashes and parser identity for one document. */
 export type DocumentGetV1Input = {
@@ -302,6 +461,17 @@ export type FirmMonitoringSetV1Output = {
 export type FirmMonitoringSetInput = FirmMonitoringSetV1Input;
 export type FirmMonitoringSetOutput = FirmMonitoringSetV1Output;
 
+/** Per-field reconciliation of the firm's own statements, third-party claims, the viewer's contributions and the firm's published profile: signals, reasons and conflicts, never a score. */
+export type FirmReconciliationV1Input = {
+  firmId: string;
+};
+export type FirmReconciliationV1Output = {
+  reconciliation: unknown;
+};
+
+export type FirmReconciliationInput = FirmReconciliationV1Input;
+export type FirmReconciliationOutput = FirmReconciliationV1Output;
+
 /** Re-researches one existing firm in this server process within the configured crawl bounds. Accepts only a firm id, never a URL. Returns at once; poll firm.get. */
 export type FirmRefreshV1Input = {
   firmId: string;
@@ -320,6 +490,7 @@ export type FirmReviewV1Input = {
   criterionId?: string | null;
   eventId?: string | null;
   findingId?: string | null;
+  claimId?: string | null;
   action: "flag" | "dispute" | "correct" | "note" | "confirm" | "dismiss";
   note: string;
   correctedValue?: string;
@@ -357,6 +528,142 @@ export type FirmVerifyV1Output = {
 
 export type FirmVerifyInput = FirmVerifyV1Input;
 export type FirmVerifyOutput = FirmVerifyV1Output;
+
+/** What needs the caller's decision: candidate matches, unresolved conflicts, proposed claims, shared contributions, representative claims (moderators) and disputed contributions (authors). */
+export type InboxListV1Input = Record<string, never>;
+export type InboxListV1Output = {
+  items: unknown;
+};
+
+export type InboxListInput = InboxListV1Input;
+export type InboxListOutput = InboxListV1Output;
+
+/** Confirms or rejects a candidate match between a source record and an existing entity, with a rationale. Rejections are remembered; nothing is merged or deleted. */
+export type MatchDecideV1Input = {
+  matchId: string;
+  decision: "confirm" | "reject";
+  entityType: "firm" | "entity";
+  entityId: string;
+  rationale: string;
+};
+export type MatchDecideV1Output = {
+  decision: unknown;
+};
+
+export type MatchDecideInput = MatchDecideV1Input;
+export type MatchDecideOutput = MatchDecideV1Output;
+
+/** Candidate matches awaiting a decision, and the history of decisions. */
+export type MatchListV1Input = Record<string, never>;
+export type MatchListV1Output = {
+  open: unknown;
+  history: unknown;
+};
+
+export type MatchListInput = MatchListV1Input;
+export type MatchListOutput = MatchListV1Output;
+
+/** A verified representative withdraws one of their approvals by appending a withdrawal. */
+export type ProfileApprovalWithdrawV1Input = {
+  firmId: string;
+  approvalId: string;
+  note: string;
+};
+export type ProfileApprovalWithdrawV1Output = {
+  approval: unknown;
+};
+
+export type ProfileApprovalWithdrawInput = ProfileApprovalWithdrawV1Input;
+export type ProfileApprovalWithdrawOutput = ProfileApprovalWithdrawV1Output;
+
+/** A verified representative approves one of the firm's criteria as the firm itself, from a research criterion, a third-party claim, or entered by hand. Works only with a verified claim for the firm's domain. */
+export type ProfileApproveV1Input = {
+  firmId: string;
+  criterionId?: string;
+  claimId?: string;
+  field?: "stage" | "sector" | "geography" | "check_size" | "business_model" | "company_characteristics" | "exclusion" | "traction" | "application_requirements";
+  polarity?: "include" | "exclude";
+  value?: string;
+  minUsd?: number;
+  maxUsd?: number;
+  note: string;
+};
+export type ProfileApproveV1Output = {
+  approval: unknown;
+};
+
+export type ProfileApproveInput = ProfileApproveV1Input;
+export type ProfileApproveOutput = ProfileApproveV1Output;
+
+/** Checks the domain-control proof for the caller's own claim through the safe-fetch boundary. The result is evidence for the moderator, not authority. */
+export type ProfileClaimCheckV1Input = {
+  claimId: string;
+};
+export type ProfileClaimCheckV1Output = {
+  event: unknown;
+};
+
+export type ProfileClaimCheckInput = ProfileClaimCheckV1Input;
+export type ProfileClaimCheckOutput = ProfileClaimCheckV1Output;
+
+/** The caller's representative claims with their status and history. */
+export type ProfileClaimMineV1Input = Record<string, never>;
+export type ProfileClaimMineV1Output = {
+  items: unknown;
+};
+
+export type ProfileClaimMineInput = ProfileClaimMineV1Input;
+export type ProfileClaimMineOutput = ProfileClaimMineV1Output;
+
+/** Requests to represent a firm. Returns a challenge to publish at /.well-known/attn-invest-claim.txt. Signing up is not authority: a moderator must verify the claim. */
+export type ProfileClaimRequestV1Input = {
+  domain: string;
+  firmName: string;
+  relationship: string;
+};
+export type ProfileClaimRequestV1Output = {
+  claim: unknown;
+  status: unknown;
+};
+
+export type ProfileClaimRequestInput = ProfileClaimRequestV1Input;
+export type ProfileClaimRequestOutput = ProfileClaimRequestV1Output;
+
+/** Approvals, withdrawals, publications and claim decisions for a firm, newest first. */
+export type ProfileHistoryV1Input = {
+  firmId: string;
+};
+export type ProfileHistoryV1Output = {
+  items: unknown;
+};
+
+export type ProfileHistoryInput = ProfileHistoryV1Input;
+export type ProfileHistoryOutput = ProfileHistoryV1Output;
+
+/** Publishes exactly the chosen representative-approved criteria as a new version of the firm's public profile, readable by every workspace. Nothing is published unless chosen. */
+export type ProfilePublishV1Input = {
+  firmId: string;
+  approvalIds: Array<string>;
+  note?: string;
+};
+export type ProfilePublishV1Output = {
+  profile: unknown;
+};
+
+export type ProfilePublishInput = ProfilePublishV1Input;
+export type ProfilePublishOutput = ProfilePublishV1Output;
+
+/** Withdraws the published profile by appending a withdrawal version. Earlier versions stay in the history. */
+export type ProfileUnpublishV1Input = {
+  firmId: string;
+  note: string;
+};
+export type ProfileUnpublishV1Output = {
+  profile: unknown;
+};
+
+export type ProfileUnpublishInput = ProfileUnpublishV1Input;
+export type ProfileUnpublishOutput = ProfileUnpublishV1Output;
 
 /** Accept a finding, override its outcome (outcome and reason required), or comment. Findings are never edited. */
 export type ReviewRecordV1Input = {
@@ -409,6 +716,129 @@ export type SessionWhoamiV1Output = {
 
 export type SessionWhoamiInput = SessionWhoamiV1Input;
 export type SessionWhoamiOutput = SessionWhoamiV1Output;
+
+/** One source: terms and limitations, run history with per-record errors, snapshots, record counts and match tallies. */
+export type SourceGetV1Input = {
+  sourceId: string;
+};
+export type SourceGetV1Output = {
+  detail: unknown;
+};
+
+export type SourceGetInput = SourceGetV1Input;
+export type SourceGetOutput = SourceGetV1Output;
+
+/** Curated sources with monitoring status, last attempt, last success and next check. */
+export type SourceListV1Input = Record<string, never>;
+export type SourceListV1Output = {
+  items: unknown;
+};
+
+export type SourceListInput = SourceListV1Input;
+export type SourceListOutput = SourceListV1Output;
+
+/** Pauses or resumes monitoring of a source, or changes its interval. Pausing keeps its records, claims and history. */
+export type SourceMonitoringSetV1Input = {
+  sourceId: string;
+  enabled?: boolean;
+  intervalMinutes?: number;
+};
+export type SourceMonitoringSetV1Output = {
+  target: unknown;
+};
+
+export type SourceMonitoringSetInput = SourceMonitoringSetV1Input;
+export type SourceMonitoringSetOutput = SourceMonitoringSetV1Output;
+
+/** Normalised records a source produced, with their original identifiers, passages and parse notes. */
+export type SourceRecordsV1Input = {
+  sourceId: string;
+  limit?: number;
+};
+export type SourceRecordsV1Output = {
+  items: unknown;
+};
+
+export type SourceRecordsInput = SourceRecordsV1Input;
+export type SourceRecordsOutput = SourceRecordsV1Output;
+
+/** Retrieves one registered source now, in this process. Accepts a source id only, never a URL. */
+export type SourceRefreshV1Input = {
+  sourceId: string;
+};
+export type SourceRefreshV1Output = {
+  run: unknown;
+};
+
+export type SourceRefreshInput = SourceRefreshV1Input;
+export type SourceRefreshOutput = SourceRefreshV1Output;
+
+/** Registers a curated third-party source (directory, dataset, funding-news feed) for monitoring. The registrant attests why automated access is permitted and where the terms say so; fetching uses the safe-fetch boundary. */
+export type SourceRegisterV1Input = {
+  name: string;
+  canonicalUrl: string;
+  publisher: string;
+  sourceType: "directory" | "curated_list" | "funding_news" | "portfolio_aggregator" | "dataset";
+  adapter: "funding_news_feed" | "csv_dataset" | "json_dataset";
+  accessBasis: "published_terms_permit" | "public_feed" | "licensed_dataset" | "owner_permission";
+  termsNote: string;
+  limitations?: string;
+  extraHosts?: Array<string>;
+  mapping?: {
+    recordsPath?: string;
+    idField?: string;
+    nameField: string;
+    websiteField?: string;
+    stageField?: string;
+    sectorsField?: string;
+    geographyField?: string;
+    checkMinField?: string;
+    checkMaxField?: string;
+    updatedField?: string;
+    listDelimiter?: string;
+    checkUnit?: "usd" | "thousands" | "millions";
+    recordKind?: "investor" | "portfolio_company";
+    investorField?: string;
+  };
+  intervalMinutes?: number;
+};
+export type SourceRegisterV1Output = {
+  source: unknown;
+  created: unknown;
+};
+
+export type SourceRegisterInput = SourceRegisterV1Input;
+export type SourceRegisterOutput = SourceRegisterV1Output;
+
+/** Updates a source's name, terms note, limitations or mapping. A changed mapping reprocesses the next retrieval. */
+export type SourceUpdateV1Input = {
+  sourceId: string;
+  name?: string;
+  termsNote?: string;
+  limitations?: string;
+  mapping?: {
+    recordsPath?: string;
+    idField?: string;
+    nameField: string;
+    websiteField?: string;
+    stageField?: string;
+    sectorsField?: string;
+    geographyField?: string;
+    checkMinField?: string;
+    checkMaxField?: string;
+    updatedField?: string;
+    listDelimiter?: string;
+    checkUnit?: "usd" | "thousands" | "millions";
+    recordKind?: "investor" | "portfolio_company";
+    investorField?: string;
+  };
+};
+export type SourceUpdateV1Output = {
+  source: unknown;
+};
+
+export type SourceUpdateInput = SourceUpdateV1Input;
+export type SourceUpdateOutput = SourceUpdateV1Output;
 
 /** Creates a startup profile. Founder claims are recorded as founder-reported evidence. */
 export type StartupCreateV1Input = {
@@ -631,7 +1061,19 @@ export interface InvestContract extends AppContract {
     "appport.ping": { input: AppportPingInput; output: AppportPingOutput; kind: "request"; version: 1 };
     "attention.list": { input: AttentionListInput; output: AttentionListOutput; kind: "request"; version: 1 };
     "audit.list": { input: AuditListInput; output: AuditListOutput; kind: "request"; version: 1 };
+    "claim.pending": { input: ClaimPendingInput; output: ClaimPendingOutput; kind: "request"; version: 1 };
+    "claim.review": { input: ClaimReviewInput; output: ClaimReviewOutput; kind: "request"; version: 1 };
+    "contribution.create": { input: ContributionCreateInput; output: ContributionCreateOutput; kind: "request"; version: 1 };
+    "contribution.edit": { input: ContributionEditInput; output: ContributionEditOutput; kind: "request"; version: 1 };
+    "contribution.mine": { input: ContributionMineInput; output: ContributionMineOutput; kind: "request"; version: 1 };
+    "contribution.queue": { input: ContributionQueueInput; output: ContributionQueueOutput; kind: "request"; version: 1 };
+    "contribution.respond": { input: ContributionRespondInput; output: ContributionRespondOutput; kind: "request"; version: 1 };
+    "contribution.revoke": { input: ContributionRevokeInput; output: ContributionRevokeOutput; kind: "request"; version: 1 };
+    "contribution.share": { input: ContributionShareInput; output: ContributionShareOutput; kind: "request"; version: 1 };
+    "contribution.shared": { input: ContributionSharedInput; output: ContributionSharedOutput; kind: "request"; version: 1 };
     "decision.record": { input: DecisionRecordInput; output: DecisionRecordOutput; kind: "request"; version: 1 };
+    "directory.get": { input: DirectoryGetInput; output: DirectoryGetOutput; kind: "request"; version: 1 };
+    "directory.list": { input: DirectoryListInput; output: DirectoryListOutput; kind: "request"; version: 1 };
     "document.get": { input: DocumentGetInput; output: DocumentGetOutput; kind: "request"; version: 1 };
     "document.link": { input: DocumentLinkInput; output: DocumentLinkOutput; kind: "request"; version: 1 };
     "document.page": { input: DocumentPageInput; output: DocumentPageOutput; kind: "request"; version: 1 };
@@ -650,14 +1092,33 @@ export interface InvestContract extends AppContract {
     "firm.get": { input: FirmGetInput; output: FirmGetOutput; kind: "request"; version: 1 };
     "firm.list": { input: FirmListInput; output: FirmListOutput; kind: "request"; version: 1 };
     "firm.monitoring.set": { input: FirmMonitoringSetInput; output: FirmMonitoringSetOutput; kind: "request"; version: 1 };
+    "firm.reconciliation": { input: FirmReconciliationInput; output: FirmReconciliationOutput; kind: "request"; version: 1 };
     "firm.refresh": { input: FirmRefreshInput; output: FirmRefreshOutput; kind: "request"; version: 1 };
     "firm.review": { input: FirmReviewInput; output: FirmReviewOutput; kind: "request"; version: 1 };
     "firm.timeline": { input: FirmTimelineInput; output: FirmTimelineOutput; kind: "request"; version: 1 };
     "firm.verify": { input: FirmVerifyInput; output: FirmVerifyOutput; kind: "request"; version: 1 };
+    "inbox.list": { input: InboxListInput; output: InboxListOutput; kind: "request"; version: 1 };
+    "match.decide": { input: MatchDecideInput; output: MatchDecideOutput; kind: "request"; version: 1 };
+    "match.list": { input: MatchListInput; output: MatchListOutput; kind: "request"; version: 1 };
+    "profile.approval.withdraw": { input: ProfileApprovalWithdrawInput; output: ProfileApprovalWithdrawOutput; kind: "request"; version: 1 };
+    "profile.approve": { input: ProfileApproveInput; output: ProfileApproveOutput; kind: "request"; version: 1 };
+    "profile.claim.check": { input: ProfileClaimCheckInput; output: ProfileClaimCheckOutput; kind: "request"; version: 1 };
+    "profile.claim.mine": { input: ProfileClaimMineInput; output: ProfileClaimMineOutput; kind: "request"; version: 1 };
+    "profile.claim.request": { input: ProfileClaimRequestInput; output: ProfileClaimRequestOutput; kind: "request"; version: 1 };
+    "profile.history": { input: ProfileHistoryInput; output: ProfileHistoryOutput; kind: "request"; version: 1 };
+    "profile.publish": { input: ProfilePublishInput; output: ProfilePublishOutput; kind: "request"; version: 1 };
+    "profile.unpublish": { input: ProfileUnpublishInput; output: ProfileUnpublishOutput; kind: "request"; version: 1 };
     "review.record": { input: ReviewRecordInput; output: ReviewRecordOutput; kind: "request"; version: 1 };
     "review.request": { input: ReviewRequestInput; output: ReviewRequestOutput; kind: "request"; version: 1 };
     "review.resolve": { input: ReviewResolveInput; output: ReviewResolveOutput; kind: "request"; version: 1 };
     "session.whoami": { input: SessionWhoamiInput; output: SessionWhoamiOutput; kind: "request"; version: 1 };
+    "source.get": { input: SourceGetInput; output: SourceGetOutput; kind: "request"; version: 1 };
+    "source.list": { input: SourceListInput; output: SourceListOutput; kind: "request"; version: 1 };
+    "source.monitoring.set": { input: SourceMonitoringSetInput; output: SourceMonitoringSetOutput; kind: "request"; version: 1 };
+    "source.records": { input: SourceRecordsInput; output: SourceRecordsOutput; kind: "request"; version: 1 };
+    "source.refresh": { input: SourceRefreshInput; output: SourceRefreshOutput; kind: "request"; version: 1 };
+    "source.register": { input: SourceRegisterInput; output: SourceRegisterOutput; kind: "request"; version: 1 };
+    "source.update": { input: SourceUpdateInput; output: SourceUpdateOutput; kind: "request"; version: 1 };
     "startup.create": { input: StartupCreateInput; output: StartupCreateOutput; kind: "request"; version: 1 };
     "startup.get": { input: StartupGetInput; output: StartupGetOutput; kind: "request"; version: 1 };
     "startup.list": { input: StartupListInput; output: StartupListOutput; kind: "request"; version: 1 };
@@ -683,7 +1144,19 @@ export const capabilityVersions: Record<string, number> = {
   "appport.ping": 1,
   "attention.list": 1,
   "audit.list": 1,
+  "claim.pending": 1,
+  "claim.review": 1,
+  "contribution.create": 1,
+  "contribution.edit": 1,
+  "contribution.mine": 1,
+  "contribution.queue": 1,
+  "contribution.respond": 1,
+  "contribution.revoke": 1,
+  "contribution.share": 1,
+  "contribution.shared": 1,
   "decision.record": 1,
+  "directory.get": 1,
+  "directory.list": 1,
   "document.get": 1,
   "document.link": 1,
   "document.page": 1,
@@ -702,14 +1175,33 @@ export const capabilityVersions: Record<string, number> = {
   "firm.get": 1,
   "firm.list": 1,
   "firm.monitoring.set": 1,
+  "firm.reconciliation": 1,
   "firm.refresh": 1,
   "firm.review": 1,
   "firm.timeline": 1,
   "firm.verify": 1,
+  "inbox.list": 1,
+  "match.decide": 1,
+  "match.list": 1,
+  "profile.approval.withdraw": 1,
+  "profile.approve": 1,
+  "profile.claim.check": 1,
+  "profile.claim.mine": 1,
+  "profile.claim.request": 1,
+  "profile.history": 1,
+  "profile.publish": 1,
+  "profile.unpublish": 1,
   "review.record": 1,
   "review.request": 1,
   "review.resolve": 1,
   "session.whoami": 1,
+  "source.get": 1,
+  "source.list": 1,
+  "source.monitoring.set": 1,
+  "source.records": 1,
+  "source.refresh": 1,
+  "source.register": 1,
+  "source.update": 1,
   "startup.create": 1,
   "startup.get": 1,
   "startup.list": 1,
@@ -1096,6 +1588,1106 @@ export const manifest = {
       ]
     },
     {
+      "name": "claim.pending",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Representative claims awaiting a moderator decision, across workspaces. Challenges are not included.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "moderation.review"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Representative claims awaiting a moderator decision, across workspaces. Challenges are not included.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "moderation.review"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "claim.review",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A moderator verifies, rejects or revokes a representative claim, with a rationale and the evidence considered. Verification needs a successful domain proof or documented evidence.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "claimId": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "verify",
+              "reject",
+              "revoke"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "claimId",
+          "decision",
+          "rationale"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "event": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "event"
+        ]
+      },
+      "authorization": [
+        "moderation.review"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A moderator verifies, rejects or revokes a representative claim, with a rationale and the evidence considered. Verification needs a successful domain proof or documented evidence.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claimId": {
+                "type": "string"
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "verify",
+                  "reject",
+                  "revoke"
+                ]
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "claimId",
+              "decision",
+              "rationale"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "event": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "event"
+            ]
+          },
+          "authorization": [
+            "moderation.review"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.create",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Records a private contribution about a firm: a correction, firsthand note, outdated-criterion flag, suggested relationship or interaction note. Private to the author's workspace until shared.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "correction",
+              "firsthand_note",
+              "flag_outdated",
+              "suggest_relationship",
+              "interaction_note"
+            ]
+          },
+          "firmDomain": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "stage",
+              "sector",
+              "geography",
+              "check_size",
+              "business_model",
+              "company_characteristics",
+              "exclusion",
+              "traction",
+              "application_requirements"
+            ]
+          },
+          "polarity": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "minUsd": {
+            "type": "number"
+          },
+          "maxUsd": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          },
+          "evidenceUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "firmDomain",
+          "text"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "contribution": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "contribution"
+        ]
+      },
+      "authorization": [
+        "contribution.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Records a private contribution about a firm: a correction, firsthand note, outdated-criterion flag, suggested relationship or interaction note. Private to the author's workspace until shared.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "correction",
+                  "firsthand_note",
+                  "flag_outdated",
+                  "suggest_relationship",
+                  "interaction_note"
+                ]
+              },
+              "firmDomain": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string",
+                "enum": [
+                  "stage",
+                  "sector",
+                  "geography",
+                  "check_size",
+                  "business_model",
+                  "company_characteristics",
+                  "exclusion",
+                  "traction",
+                  "application_requirements"
+                ]
+              },
+              "polarity": {
+                "type": "string",
+                "enum": [
+                  "include",
+                  "exclude"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "minUsd": {
+                "type": "number"
+              },
+              "maxUsd": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              },
+              "evidenceUrls": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "firmDomain",
+              "text"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "contribution": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "contribution"
+            ]
+          },
+          "authorization": [
+            "contribution.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.edit",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Edits a contribution by creating a new version; earlier versions stay.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chainId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "correction",
+              "firsthand_note",
+              "flag_outdated",
+              "suggest_relationship",
+              "interaction_note"
+            ]
+          },
+          "firmDomain": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "stage",
+              "sector",
+              "geography",
+              "check_size",
+              "business_model",
+              "company_characteristics",
+              "exclusion",
+              "traction",
+              "application_requirements"
+            ]
+          },
+          "polarity": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "minUsd": {
+            "type": "number"
+          },
+          "maxUsd": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          },
+          "evidenceUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "chainId",
+          "kind",
+          "firmDomain",
+          "text"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "contribution": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "contribution"
+        ]
+      },
+      "authorization": [
+        "contribution.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Edits a contribution by creating a new version; earlier versions stay.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "chainId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "correction",
+                  "firsthand_note",
+                  "flag_outdated",
+                  "suggest_relationship",
+                  "interaction_note"
+                ]
+              },
+              "firmDomain": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string",
+                "enum": [
+                  "stage",
+                  "sector",
+                  "geography",
+                  "check_size",
+                  "business_model",
+                  "company_characteristics",
+                  "exclusion",
+                  "traction",
+                  "application_requirements"
+                ]
+              },
+              "polarity": {
+                "type": "string",
+                "enum": [
+                  "include",
+                  "exclude"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "minUsd": {
+                "type": "number"
+              },
+              "maxUsd": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              },
+              "evidenceUrls": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "chainId",
+              "kind",
+              "firmDomain",
+              "text"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "contribution": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "contribution"
+            ]
+          },
+          "authorization": [
+            "contribution.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.mine",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The caller's own contributions with sharing state, share history and the responses received.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmDomain": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "contribution.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The caller's own contributions with sharing state, share history and the responses received.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmDomain": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "contribution.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.queue",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Contributions authors chose to share with moderators.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "moderation.review"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Contributions authors chose to share with moderators.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "moderation.review"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.respond",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A verified representative or moderator responds to a shared contribution. A dispute is recorded beside the contribution; it never edits or deletes it.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chainId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "dispute",
+              "dismiss",
+              "flag",
+              "note"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "as": {
+            "type": "string",
+            "enum": [
+              "firm_representative",
+              "moderator"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "chainId",
+          "action",
+          "note",
+          "as"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "response": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "response"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A verified representative or moderator responds to a shared contribution. A dispute is recorded beside the contribution; it never edits or deletes it.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "chainId": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "confirm",
+                  "dispute",
+                  "dismiss",
+                  "flag",
+                  "note"
+                ]
+              },
+              "note": {
+                "type": "string"
+              },
+              "as": {
+                "type": "string",
+                "enum": [
+                  "firm_representative",
+                  "moderator"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "chainId",
+              "action",
+              "note",
+              "as"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "response": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "response"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.revoke",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Revokes sharing for one audience. The receiver can no longer read it; their earlier responses remain.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chainId": {
+            "type": "string"
+          },
+          "audience": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "firm",
+                  "moderator"
+                ]
+              },
+              "domain": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "chainId",
+          "audience"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "share": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "share"
+        ]
+      },
+      "authorization": [
+        "contribution.share"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Revokes sharing for one audience. The receiver can no longer read it; their earlier responses remain.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "chainId": {
+                "type": "string"
+              },
+              "audience": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "firm",
+                      "moderator"
+                    ]
+                  },
+                  "domain": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "chainId",
+              "audience"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "share": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "share"
+            ]
+          },
+          "authorization": [
+            "contribution.share"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.share",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Shares a contribution with the firm it is about, or with moderators. Sharing is consent for that audience only; it is not publishing. Aggregate-analysis consent is a separate, explicit flag.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chainId": {
+            "type": "string"
+          },
+          "audience": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "firm",
+                  "moderator"
+                ]
+              },
+              "domain": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          "aggregateConsent": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "chainId",
+          "audience"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "share": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "share"
+        ]
+      },
+      "authorization": [
+        "contribution.share"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Shares a contribution with the firm it is about, or with moderators. Sharing is consent for that audience only; it is not publishing. Aggregate-analysis consent is a separate, explicit flag.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "chainId": {
+                "type": "string"
+              },
+              "audience": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "firm",
+                      "moderator"
+                    ]
+                  },
+                  "domain": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "kind"
+                ]
+              },
+              "aggregateConsent": {
+                "type": "boolean"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "chainId",
+              "audience"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "share": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "share"
+            ]
+          },
+          "authorization": [
+            "contribution.share"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "contribution.shared",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Contributions authors shared with the firm. Only a verified representative of that firm can read them; authors are not identified.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "domain"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "contribution.read_shared"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Contributions authors shared with the firm. Only a verified representative of that firm can read them; authors are not identified.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "domain"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "contribution.read_shared"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
       "name": "decision.record",
       "versions": [
         1
@@ -1203,6 +2795,140 @@ export const manifest = {
           "concurrency": {
             "mode": "keyed",
             "key": "evaluationId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "directory.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A firm's published profile for a domain, or null.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "domain"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "profile"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A firm's published profile for a domain, or null.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "domain"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "profile": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "profile"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "directory.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Firms that have published an investor-approved profile (current versions only). The one place a workspace reads another workspace's data, and only what a verified representative chose to publish.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Firms that have published an investor-approved profile (current versions only). The one place a workspace reads another workspace's data, and only what a verified representative chose to publish.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
           }
         }
       ]
@@ -2869,6 +4595,80 @@ export const manifest = {
       ]
     },
     {
+      "name": "firm.reconciliation",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Per-field reconciliation of the firm's own statements, third-party claims, the viewer's contributions and the firm's published profile: signals, reasons and conflicts, never a score.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reconciliation": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "reconciliation"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Per-field reconciliation of the firm's own statements, third-party claims, the viewer's contributions and the firm's published profile: signals, reasons and conflicts, never a score.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "reconciliation": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "reconciliation"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
       "name": "firm.refresh",
       "versions": [
         1
@@ -2992,6 +4792,16 @@ export const manifest = {
               }
             ]
           },
+          "claimId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "action": {
             "type": "string",
             "enum": [
@@ -3066,6 +4876,16 @@ export const manifest = {
                 ]
               },
               "findingId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "claimId": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -3306,6 +5126,976 @@ export const manifest = {
           },
           "authorization": [
             "research.run"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "inbox.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "What needs the caller's decision: candidate matches, unresolved conflicts, proposed claims, shared contributions, representative claims (moderators) and disputed contributions (authors).",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "What needs the caller's decision: candidate matches, unresolved conflicts, proposed claims, shared contributions, representative claims (moderators) and disputed contributions (authors).",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "match.decide",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Confirms or rejects a candidate match between a source record and an existing entity, with a rationale. Rejections are remembered; nothing is merged or deleted.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "confirm",
+              "reject"
+            ]
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "firm",
+              "entity"
+            ]
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "matchId",
+          "decision",
+          "entityType",
+          "entityId",
+          "rationale"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "decision": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "decision"
+        ]
+      },
+      "authorization": [
+        "review.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Confirms or rejects a candidate match between a source record and an existing entity, with a rationale. Rejections are remembered; nothing is merged or deleted.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "matchId": {
+                "type": "string"
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "confirm",
+                  "reject"
+                ]
+              },
+              "entityType": {
+                "type": "string",
+                "enum": [
+                  "firm",
+                  "entity"
+                ]
+              },
+              "entityId": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "matchId",
+              "decision",
+              "entityType",
+              "entityId",
+              "rationale"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "decision": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "decision"
+            ]
+          },
+          "authorization": [
+            "review.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "match.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Candidate matches awaiting a decision, and the history of decisions.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "open": {},
+          "history": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "open",
+          "history"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Candidate matches awaiting a decision, and the history of decisions.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "open": {},
+              "history": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "open",
+              "history"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.approval.withdraw",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A verified representative withdraws one of their approvals by appending a withdrawal.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "approvalId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "approvalId",
+          "note"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approval": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "approval"
+        ]
+      },
+      "authorization": [
+        "profile.publish"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A verified representative withdraws one of their approvals by appending a withdrawal.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "approvalId": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "approvalId",
+              "note"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "approval": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "approval"
+            ]
+          },
+          "authorization": [
+            "profile.publish"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.approve",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A verified representative approves one of the firm's criteria as the firm itself, from a research criterion, a third-party claim, or entered by hand. Works only with a verified claim for the firm's domain.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "criterionId": {
+            "type": "string"
+          },
+          "claimId": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "stage",
+              "sector",
+              "geography",
+              "check_size",
+              "business_model",
+              "company_characteristics",
+              "exclusion",
+              "traction",
+              "application_requirements"
+            ]
+          },
+          "polarity": {
+            "type": "string",
+            "enum": [
+              "include",
+              "exclude"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "minUsd": {
+            "type": "number"
+          },
+          "maxUsd": {
+            "type": "number"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "note"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approval": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "approval"
+        ]
+      },
+      "authorization": [
+        "profile.publish"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A verified representative approves one of the firm's criteria as the firm itself, from a research criterion, a third-party claim, or entered by hand. Works only with a verified claim for the firm's domain.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "criterionId": {
+                "type": "string"
+              },
+              "claimId": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string",
+                "enum": [
+                  "stage",
+                  "sector",
+                  "geography",
+                  "check_size",
+                  "business_model",
+                  "company_characteristics",
+                  "exclusion",
+                  "traction",
+                  "application_requirements"
+                ]
+              },
+              "polarity": {
+                "type": "string",
+                "enum": [
+                  "include",
+                  "exclude"
+                ]
+              },
+              "value": {
+                "type": "string"
+              },
+              "minUsd": {
+                "type": "number"
+              },
+              "maxUsd": {
+                "type": "number"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "note"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "approval": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "approval"
+            ]
+          },
+          "authorization": [
+            "profile.publish"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.claim.check",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Checks the domain-control proof for the caller's own claim through the safe-fetch boundary. The result is evidence for the moderator, not authority.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "claimId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "claimId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "event": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "event"
+        ]
+      },
+      "authorization": [
+        "profile.claim"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Checks the domain-control proof for the caller's own claim through the safe-fetch boundary. The result is evidence for the moderator, not authority.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "claimId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "claimId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "event": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "event"
+            ]
+          },
+          "authorization": [
+            "profile.claim"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.claim.mine",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The caller's representative claims with their status and history.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "profile.claim"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The caller's representative claims with their status and history.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "profile.claim"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.claim.request",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Requests to represent a firm. Returns a challenge to publish at /.well-known/attn-invest-claim.txt. Signing up is not authority: a moderator must verify the claim.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string"
+          },
+          "firmName": {
+            "type": "string"
+          },
+          "relationship": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "domain",
+          "firmName",
+          "relationship"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "claim": {},
+          "status": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "status"
+        ]
+      },
+      "authorization": [
+        "profile.claim"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Requests to represent a firm. Returns a challenge to publish at /.well-known/attn-invest-claim.txt. Signing up is not authority: a moderator must verify the claim.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string"
+              },
+              "firmName": {
+                "type": "string"
+              },
+              "relationship": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "domain",
+              "firmName",
+              "relationship"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "claim": {},
+              "status": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "claim",
+              "status"
+            ]
+          },
+          "authorization": [
+            "profile.claim"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.history",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Approvals, withdrawals, publications and claim decisions for a firm, newest first.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Approvals, withdrawals, publications and claim decisions for a firm, newest first.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.publish",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Publishes exactly the chosen representative-approved criteria as a new version of the firm's public profile, readable by every workspace. Nothing is published unless chosen.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "approvalIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "approvalIds"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "profile"
+        ]
+      },
+      "authorization": [
+        "profile.publish"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Publishes exactly the chosen representative-approved criteria as a new version of the firm's public profile, readable by every workspace. Nothing is published unless chosen.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "approvalIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "approvalIds"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "profile": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "profile"
+            ]
+          },
+          "authorization": [
+            "profile.publish"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile.unpublish",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Withdraws the published profile by appending a withdrawal version. Earlier versions stay in the history.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "firmId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "firmId",
+          "note"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "profile": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "profile"
+        ]
+      },
+      "authorization": [
+        "profile.publish"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Withdraws the published profile by appending a withdrawal version. Earlier versions stay in the history.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "firmId": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "firmId",
+              "note"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "profile": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "profile"
+            ]
+          },
+          "authorization": [
+            "profile.publish"
           ],
           "idempotency": "unsupported",
           "concurrency": {
@@ -3712,6 +6502,902 @@ export const manifest = {
           },
           "authorization": [
             "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "One source: terms and limitations, run history with per-record errors, snapshots, record counts and match tallies.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "detail": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "detail"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "One source: terms and limitations, run history with per-record errors, snapshots, record counts and match tallies.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "sourceId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "sourceId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "detail": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "detail"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Curated sources with monitoring status, last attempt, last success and next check.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Curated sources with monitoring status, last attempt, last success and next check.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.monitoring.set",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Pauses or resumes monitoring of a source, or changes its interval. Pausing keeps its records, claims and history.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "intervalMinutes": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "target": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "target"
+        ]
+      },
+      "authorization": [
+        "source.manage"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Pauses or resumes monitoring of a source, or changes its interval. Pausing keeps its records, claims and history.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "sourceId": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "intervalMinutes": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "sourceId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "target": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "target"
+            ]
+          },
+          "authorization": [
+            "source.manage"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.records",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Normalised records a source produced, with their original identifiers, passages and parse notes.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Normalised records a source produced, with their original identifiers, passages and parse notes.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "sourceId": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "sourceId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.refresh",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Retrieves one registered source now, in this process. Accepts a source id only, never a URL.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "run": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "run"
+        ]
+      },
+      "authorization": [
+        "source.manage"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "sourceId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Retrieves one registered source now, in this process. Accepts a source id only, never a URL.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "sourceId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "sourceId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "run": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "run"
+            ]
+          },
+          "authorization": [
+            "source.manage"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "sourceId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.register",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Registers a curated third-party source (directory, dataset, funding-news feed) for monitoring. The registrant attests why automated access is permitted and where the terms say so; fetching uses the safe-fetch boundary.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "canonicalUrl": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "curated_list",
+              "funding_news",
+              "portfolio_aggregator",
+              "dataset"
+            ]
+          },
+          "adapter": {
+            "type": "string",
+            "enum": [
+              "funding_news_feed",
+              "csv_dataset",
+              "json_dataset"
+            ]
+          },
+          "accessBasis": {
+            "type": "string",
+            "enum": [
+              "published_terms_permit",
+              "public_feed",
+              "licensed_dataset",
+              "owner_permission"
+            ]
+          },
+          "termsNote": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "string"
+          },
+          "extraHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3
+          },
+          "mapping": {
+            "type": "object",
+            "properties": {
+              "recordsPath": {
+                "type": "string"
+              },
+              "idField": {
+                "type": "string"
+              },
+              "nameField": {
+                "type": "string"
+              },
+              "websiteField": {
+                "type": "string"
+              },
+              "stageField": {
+                "type": "string"
+              },
+              "sectorsField": {
+                "type": "string"
+              },
+              "geographyField": {
+                "type": "string"
+              },
+              "checkMinField": {
+                "type": "string"
+              },
+              "checkMaxField": {
+                "type": "string"
+              },
+              "updatedField": {
+                "type": "string"
+              },
+              "listDelimiter": {
+                "type": "string"
+              },
+              "checkUnit": {
+                "type": "string",
+                "enum": [
+                  "usd",
+                  "thousands",
+                  "millions"
+                ]
+              },
+              "recordKind": {
+                "type": "string",
+                "enum": [
+                  "investor",
+                  "portfolio_company"
+                ]
+              },
+              "investorField": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "nameField"
+            ]
+          },
+          "intervalMinutes": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "canonicalUrl",
+          "publisher",
+          "sourceType",
+          "adapter",
+          "accessBasis",
+          "termsNote"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "source": {},
+          "created": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "created"
+        ]
+      },
+      "authorization": [
+        "source.manage"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Registers a curated third-party source (directory, dataset, funding-news feed) for monitoring. The registrant attests why automated access is permitted and where the terms say so; fetching uses the safe-fetch boundary.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "canonicalUrl": {
+                "type": "string"
+              },
+              "publisher": {
+                "type": "string"
+              },
+              "sourceType": {
+                "type": "string",
+                "enum": [
+                  "directory",
+                  "curated_list",
+                  "funding_news",
+                  "portfolio_aggregator",
+                  "dataset"
+                ]
+              },
+              "adapter": {
+                "type": "string",
+                "enum": [
+                  "funding_news_feed",
+                  "csv_dataset",
+                  "json_dataset"
+                ]
+              },
+              "accessBasis": {
+                "type": "string",
+                "enum": [
+                  "published_terms_permit",
+                  "public_feed",
+                  "licensed_dataset",
+                  "owner_permission"
+                ]
+              },
+              "termsNote": {
+                "type": "string"
+              },
+              "limitations": {
+                "type": "string"
+              },
+              "extraHosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 3
+              },
+              "mapping": {
+                "type": "object",
+                "properties": {
+                  "recordsPath": {
+                    "type": "string"
+                  },
+                  "idField": {
+                    "type": "string"
+                  },
+                  "nameField": {
+                    "type": "string"
+                  },
+                  "websiteField": {
+                    "type": "string"
+                  },
+                  "stageField": {
+                    "type": "string"
+                  },
+                  "sectorsField": {
+                    "type": "string"
+                  },
+                  "geographyField": {
+                    "type": "string"
+                  },
+                  "checkMinField": {
+                    "type": "string"
+                  },
+                  "checkMaxField": {
+                    "type": "string"
+                  },
+                  "updatedField": {
+                    "type": "string"
+                  },
+                  "listDelimiter": {
+                    "type": "string"
+                  },
+                  "checkUnit": {
+                    "type": "string",
+                    "enum": [
+                      "usd",
+                      "thousands",
+                      "millions"
+                    ]
+                  },
+                  "recordKind": {
+                    "type": "string",
+                    "enum": [
+                      "investor",
+                      "portfolio_company"
+                    ]
+                  },
+                  "investorField": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "nameField"
+                ]
+              },
+              "intervalMinutes": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "canonicalUrl",
+              "publisher",
+              "sourceType",
+              "adapter",
+              "accessBasis",
+              "termsNote"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "source": {},
+              "created": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "created"
+            ]
+          },
+          "authorization": [
+            "source.manage"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "source.update",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Updates a source's name, terms note, limitations or mapping. A changed mapping reprocesses the next retrieval.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "termsNote": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "string"
+          },
+          "mapping": {
+            "type": "object",
+            "properties": {
+              "recordsPath": {
+                "type": "string"
+              },
+              "idField": {
+                "type": "string"
+              },
+              "nameField": {
+                "type": "string"
+              },
+              "websiteField": {
+                "type": "string"
+              },
+              "stageField": {
+                "type": "string"
+              },
+              "sectorsField": {
+                "type": "string"
+              },
+              "geographyField": {
+                "type": "string"
+              },
+              "checkMinField": {
+                "type": "string"
+              },
+              "checkMaxField": {
+                "type": "string"
+              },
+              "updatedField": {
+                "type": "string"
+              },
+              "listDelimiter": {
+                "type": "string"
+              },
+              "checkUnit": {
+                "type": "string",
+                "enum": [
+                  "usd",
+                  "thousands",
+                  "millions"
+                ]
+              },
+              "recordKind": {
+                "type": "string",
+                "enum": [
+                  "investor",
+                  "portfolio_company"
+                ]
+              },
+              "investorField": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "nameField"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sourceId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "source": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "source"
+        ]
+      },
+      "authorization": [
+        "source.manage"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Updates a source's name, terms note, limitations or mapping. A changed mapping reprocesses the next retrieval.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "sourceId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "termsNote": {
+                "type": "string"
+              },
+              "limitations": {
+                "type": "string"
+              },
+              "mapping": {
+                "type": "object",
+                "properties": {
+                  "recordsPath": {
+                    "type": "string"
+                  },
+                  "idField": {
+                    "type": "string"
+                  },
+                  "nameField": {
+                    "type": "string"
+                  },
+                  "websiteField": {
+                    "type": "string"
+                  },
+                  "stageField": {
+                    "type": "string"
+                  },
+                  "sectorsField": {
+                    "type": "string"
+                  },
+                  "geographyField": {
+                    "type": "string"
+                  },
+                  "checkMinField": {
+                    "type": "string"
+                  },
+                  "checkMaxField": {
+                    "type": "string"
+                  },
+                  "updatedField": {
+                    "type": "string"
+                  },
+                  "listDelimiter": {
+                    "type": "string"
+                  },
+                  "checkUnit": {
+                    "type": "string",
+                    "enum": [
+                      "usd",
+                      "thousands",
+                      "millions"
+                    ]
+                  },
+                  "recordKind": {
+                    "type": "string",
+                    "enum": [
+                      "investor",
+                      "portfolio_company"
+                    ]
+                  },
+                  "investorField": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "nameField"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "sourceId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "source": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "source"
+            ]
+          },
+          "authorization": [
+            "source.manage"
           ],
           "idempotency": "unsupported",
           "concurrency": {

@@ -838,3 +838,70 @@ dl.facts dd {
 .tag.review-disputed {
 	border-color: var(--o-contradicted);
 }
+
+/* ---------- collaboration ---------- */
+.tabs {
+	display: flex;
+	gap: var(--s2);
+	border-bottom: 1px solid var(--rule);
+	margin-bottom: var(--s4);
+	flex-wrap: wrap;
+}
+.tab {
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	padding: 8px 12px;
+	cursor: pointer;
+	color: var(--muted);
+}
+.tab.on {
+	color: var(--ink);
+	border-bottom-color: var(--action);
+	font-weight: 600;
+}
+.tag.cat-investor_verified {
+	border-color: var(--o-supported);
+	font-weight: 600;
+}
+.tag.cat-official_public_source {
+	border-color: var(--action);
+}
+.tag.cat-third_party_source {
+	border-style: dashed;
+	border-color: var(--o-partial);
+}
+.tag.cat-founder_contribution,
+.tag.cat-community_contribution {
+	border-style: dotted;
+	border-color: var(--o-insufficient);
+}
+.tag.recon-status-conflicted {
+	border-color: var(--o-contradicted);
+}
+.tag.recon-status-agreed {
+	border-color: var(--o-supported);
+}
+.tag.lc-tag-accepted {
+	border-color: var(--o-supported);
+}
+.tag.lc-tag-rejected,
+.tag.lc-tag-disputed {
+	border-color: var(--o-contradicted);
+}
+.tag.lc-tag-superseded {
+	opacity: 0.7;
+	text-decoration: line-through;
+}
+tr.claim.lc-superseded,
+tr.claim.lc-rejected {
+	opacity: 0.65;
+}
+label.check {
+	display: flex;
+	gap: 6px;
+	align-items: baseline;
+}
+.recon-conflicted {
+	border-left: 3px solid var(--o-contradicted);
+}

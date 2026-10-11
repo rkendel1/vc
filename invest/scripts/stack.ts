@@ -5,11 +5,12 @@ import type { Actor } from "../domain/types.ts";
 import { JevHttpClient, UnconfiguredJev } from "../jev/jev-client.ts";
 import { InvestorResearchModule } from "../modules/investor-research.ts";
 import { MonitoringModule } from "../modules/monitoring.ts";
+import { SourceIngestionModule } from "../modules/source-ingestion.ts";
 import { SafeHttpFetcher } from "../research/fetcher.ts";
 import { InvestStore } from "../store/store.ts";
 
 /** What the command-line tools share: the store, the research and monitoring modules, and the operator's actor. No server, no AppPort. */
-export type Stack = { config: InvestConfig; store: InvestStore; research: InvestorResearchModule; monitoring: MonitoringModule; actor: Actor; close(): Promise<void> };
+export type Stack = { config: InvestConfig; store: InvestStore; research: InvestorResearchModule; monitoring: MonitoringModule; sources: SourceIngestionModule; actor: Actor; close(): Promise<void> };
 
 export async function openStack(options: { workspace: string; clock?: () => Date; fail: (message: string) => never }): Promise<Stack> {
 	const { config, warnings } = loadConfig();
@@ -35,6 +36,15 @@ export async function openStack(options: { workspace: string; clock?: () => Date
 		jevTimeoutMs: config.jev.timeoutMs,
 	});
 	const monitoring = new MonitoringModule(store, research, monitoringOptions(config));
-	const actor: Actor = { principalId: "research-cli", displayName: "Research CLI", workspaceId: options.workspace, permissions: ["invest.read", "research.run"] };
-	return { config, store, research, monitoring, actor, close: () => store.close() };
+	const sources = new SourceIngestionModule({
+		store,
+		fetcherForSource: (source, limits) => new SafeHttpFetcher({ scopeDomain: source.allowedHosts[0]!, extraHosts: source.allowedHosts.slice(1), limits, userAgent: r.userAgent, robotsToken: "AttnInvestResearchBot" }),
+		defaults: { maxPages: r.maxPages, maxDepth: r.maxDepth, timeoutMs: r.timeoutMs, retries: r.retries, perDomainDelayMs: r.perDomainDelayMs, maxBytes: r.maxBytes, maxRedirects: r.maxRedirects },
+		maxBytes: config.sources.maxBytes,
+		maxRecords: config.sources.maxRecords,
+		lookbackDays: r.announcementLookbackDays,
+	});
+	monitoring.setIngestion(sources);
+	const actor: Actor = { principalId: "research-cli", displayName: "Research CLI", workspaceId: options.workspace, permissions: ["invest.read", "research.run", "source.manage", "review.write"] };
+	return { config, store, research, monitoring, sources, actor, close: () => store.close() };
 }

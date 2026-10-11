@@ -43,8 +43,15 @@ export type AuthBoundryAuthority = { authorize(request: AuthBoundryAuthorization
 
 export const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
 	viewer: ["invest.read", "audit.read"],
-	analyst: ["invest.read", "thesis.write", "startup.write", "document.write", "evidence.write", "evaluation.run", "review.write", "audit.read", "research.run"],
-	partner: ALL_PERMISSIONS,
+	analyst: ["invest.read", "thesis.write", "startup.write", "document.write", "evidence.write", "evaluation.run", "review.write", "audit.read", "research.run", "contribution.write", "contribution.share", "source.manage"],
+	// A fund partner administers their own workspace. Verifying who may represent a firm is a platform duty, never a fund's.
+	partner: ALL_PERMISSIONS.filter((p) => p !== "moderation.review"),
+	// A founder works in their own workspace: reads the public directory, keeps private notes, and chooses what to share.
+	founder: ["invest.read", "contribution.write", "contribution.share"],
+	// A firm representative can ask to represent a firm; approval and publishing only work once a moderator has verified the claim.
+	investor_rep: ["invest.read", "audit.read", "review.write", "research.run", "profile.claim", "profile.publish", "contribution.read_shared"],
+	// A moderator verifies representative claims, resolves matches and reviews proposals across workspaces. No access to private notes.
+	moderator: ["invest.read", "audit.read", "moderation.review", "source.manage", "review.write"],
 };
 
 export type PrincipalEntry = { id: string; displayName: string; workspaceId: string; role: keyof typeof ROLE_PERMISSIONS | string; tokenSha256: string };

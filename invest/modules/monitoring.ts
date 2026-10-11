@@ -3,7 +3,9 @@ import { forbidden, invalid, notFound } from "../domain/errors.ts";
 import type { InvestorFirm, MonitoringTarget, ResearchLimits } from "../domain/research.ts";
 import type { Actor } from "../domain/types.ts";
 import { C, type InvestStore } from "../store/store.ts";
+import type { CuratedSource } from "../domain/collab.ts";
 import type { InvestorResearchModule, RunOutcome } from "./investor-research.ts";
+import type { SourceIngestionModule } from "./source-ingestion.ts";
 
 /**
  * Persistent monitoring of registered firms.
@@ -48,6 +50,7 @@ export class MonitoringModule {
 	private readonly random: () => number;
 	private readonly jitter: number;
 	private active = new Set<Promise<unknown>>();
+	private ingestion: SourceIngestionModule | null = null;
 
 	constructor(
 		private readonly store: InvestStore,
@@ -61,6 +64,29 @@ export class MonitoringModule {
 		research.setObserver(async (actor, outcome) => {
 			await this.recordOutcome(actor, outcome);
 		});
+	}
+
+	/** Curated sources are scheduled by the same targets, leases, backoff and runner as firms. */
+	setIngestion(ingestion: SourceIngestionModule) {
+		this.ingestion = ingestion;
+		ingestion.setMonitoring(this);
+		ingestion.setObserver(async (actor, outcome) => {
+			await this.recordOutcome(actor, outcome);
+		});
+	}
+
+	/** Makes a registered source a persistent target (kind "source"; the target id is the source id). Idempotent. */
+	async registerSource(actor: Actor, source: Pick<CuratedSource, "id" | "canonicalUrl" | "allowedHosts">, options: { intervalMinutes?: number } = {}): Promise<MonitoringTarget> {
+		const existing = await this.get(actor, source.id);
+		if (existing) return existing;
+		const now = this.store.now();
+		const target: MonitoringTarget = { id: source.id, kind: "source", workspaceId: actor.workspaceId, firmId: source.id, canonicalDomain: source.allowedHosts[0] ?? "", website: source.canonicalUrl, enabled: true, intervalMinutes: this.cleanInterval(options.intervalMinutes), limits: { maxPages: null, maxDepth: null }, nextCheckAt: now, lastAttemptAt: null, lastSuccessAt: null, lastRunId: null, consecutiveFailures: 0, lastError: null, lease: null, pausedAt: null, pausedBy: null, createdAt: now, createdBy: actor.principalId, updatedAt: now };
+		try {
+			await this.store.commit(actor, { writes: [{ collection: C.monitoringTargets, id: target.id, value: target as unknown as Record<string, unknown>, create: true }], audit: [{ eventType: "monitoring.target_registered", entityRef: { type: "monitoring_target", id: target.id }, payload: { sourceId: source.id, kind: "source", intervalMinutes: target.intervalMinutes } }] });
+		} catch (error) {
+			if ((error as { code?: string }).code !== "conflict") throw error;
+		}
+		return (await this.get(actor, source.id))!;
 	}
 
 	// ------------------------------------------------------------------ targets
@@ -124,10 +150,11 @@ export class MonitoringModule {
 
 	/** Pause, resume or reconfigure. Pausing keeps the firm, its profile and all history; it only stops scheduling. */
 	async configure(actor: Actor, firmId: string, change: { enabled?: boolean; intervalMinutes?: number; limits?: { maxPages?: number | null; maxDepth?: number | null } }): Promise<MonitoringTarget> {
-		if (!actor.permissions.includes("research.run")) throw forbidden("Changing monitoring needs the research.run permission");
 		for (let attempt = 0; attempt < 5; attempt++) {
 			const t = await this.get(actor, firmId);
 			if (!t) throw notFound("Monitoring target");
+			const need = t.kind === "source" ? "source.manage" : "research.run";
+			if (!actor.permissions.includes(need)) throw forbidden(`Changing monitoring needs the ${need} permission`);
 			const now = this.store.now();
 			const next: MonitoringTarget = { ...t, updatedAt: now };
 			const changed: string[] = [];
@@ -230,7 +257,7 @@ export class MonitoringModule {
 	}
 
 	private systemActor(workspaceId: string): Actor {
-		return { principalId: "monitor", displayName: "Monitoring", workspaceId, permissions: ["invest.read", "research.run"] };
+		return { principalId: "monitor", displayName: "Monitoring", workspaceId, permissions: ["invest.read", "research.run", "source.manage"] };
 	}
 
 	/** Takes the lease with a conditional write. Returns the token, or null if another worker got there first. */
@@ -258,6 +285,7 @@ export class MonitoringModule {
 		const lease = await this.acquire(t);
 		if (!lease) return { ...entry, result: "skipped_leased" };
 		const actor = this.systemActor(t.workspaceId);
+		if (lease.target.kind === "source") return this.checkSource(actor, t, lease, entry);
 		const limits: Partial<ResearchLimits> = {};
 		if (lease.target.limits.maxPages) limits.maxPages = lease.target.limits.maxPages;
 		if (lease.target.limits.maxDepth !== null) limits.maxDepth = lease.target.limits.maxDepth;
@@ -271,6 +299,32 @@ export class MonitoringModule {
 			const message = (error as Error)?.message?.slice(0, 300) ?? "check failed";
 			if (/already running/.test(message)) {
 				// A manual refresh is in progress. Not a failure: release the lease and look again soon.
+				await this.release(actor, t.firmId, lease.token, 5 * MINUTE);
+				return { ...entry, result: "skipped_running", message };
+			}
+			entry.success = false;
+			entry.message = message;
+			outcome = { firmId: t.firmId, runId: null, at: this.store.now(), success: false, retryable: true, message };
+		}
+		const applied = await this.recordOutcome(actor, outcome, lease.token);
+		if (applied === "fenced") return { ...entry, result: "fenced", message: "the lease was lost; this result was not applied to the schedule" };
+		return { ...entry, result: entry.success === false && !entry.runId ? "failed" : "ran" };
+	}
+
+	private async checkSource(actor: Actor, t: MonitoringTarget, lease: { token: string }, entry: CycleEntry): Promise<CycleEntry> {
+		if (!this.ingestion) {
+			await this.release(actor, t.firmId, lease.token, 5 * MINUTE);
+			return { ...entry, result: "failed", message: "source ingestion is not configured in this process" };
+		}
+		let outcome: RunOutcome;
+		try {
+			const run = await this.ingestion.runSource(actor, t.firmId, { observer: null });
+			entry.runId = run.id;
+			entry.success = run.success;
+			outcome = { firmId: t.firmId, runId: run.id, at: run.completedAt ?? this.store.now(), success: run.success, retryable: run.error?.retryable ?? false, message: run.error?.message ?? null };
+		} catch (error) {
+			const message = (error as Error)?.message?.slice(0, 300) ?? "check failed";
+			if (/already being retrieved/.test(message)) {
 				await this.release(actor, t.firmId, lease.token, 5 * MINUTE);
 				return { ...entry, result: "skipped_running", message };
 			}

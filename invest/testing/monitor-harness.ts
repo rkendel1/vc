@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Actor } from "../domain/types.ts";
 import { UnconfiguredJev, type JevDecider } from "../jev/jev-client.ts";
+import { ROLE_PERMISSIONS } from "../auth/authboundry-adapter.ts";
 import { InvestorResearchModule } from "../modules/investor-research.ts";
+import { ParticipationModule } from "../modules/participation.ts";
+import { ReconciliationModule } from "../modules/reconciliation.ts";
+import { SourceIngestionModule } from "../modules/source-ingestion.ts";
 import { MonitoringModule, type MonitoringOptions } from "../modules/monitoring.ts";
 import { InvestStore } from "../store/store.ts";
 import { FakeWeb, type FakeSites } from "./fake-web.ts";
@@ -15,7 +19,10 @@ export class MonitorRig {
 	store!: InvestStore;
 	research!: InvestorResearchModule;
 	monitoring!: MonitoringModule;
-	readonly A: Actor = { ...actor("ws-a"), permissions: ["invest.read", "research.run", "review.write", "thesis.approve"] };
+	sources!: SourceIngestionModule;
+	participation!: ParticipationModule;
+	reconciliation!: ReconciliationModule;
+	readonly A: Actor = { ...actor("ws-a"), permissions: ["invest.read", "research.run", "review.write", "thesis.approve", "source.manage"], role: "partner" };
 
 	private constructor(
 		readonly dir: string,
@@ -39,6 +46,15 @@ export class MonitorRig {
 		this.store = await InvestStore.openDir(join(this.dir, "felt"), () => new Date(this.now));
 		this.research = new InvestorResearchModule({ store: this.store, jev: this.jev, fetcherFor: this.web.fetcherFor, defaults: TEST_RESEARCH_LIMITS, staleAfterDays: 180, staleSourceDays: 14, lookbackDays: 730, jevTimeoutMs: 5_000 });
 		this.monitoring = this.newMonitoring(ownerId);
+		this.sources = new SourceIngestionModule({ store: this.store, fetcherForSource: this.web.fetcherForSource, defaults: TEST_RESEARCH_LIMITS, maxBytes: 5_000_000, maxRecords: 5_000, lookbackDays: 730 });
+		this.monitoring.setIngestion(this.sources);
+		this.participation = new ParticipationModule({ store: this.store, research: this.research, fetcherFor: this.web.fetcherFor, limits: TEST_RESEARCH_LIMITS });
+		this.reconciliation = new ReconciliationModule({ store: this.store, research: this.research, participation: this.participation, sources: this.sources, staleAfterDays: 180 });
+	}
+
+	/** An actor with the real permissions of a role, in a workspace of their own. */
+	as(role: keyof typeof ROLE_PERMISSIONS, workspaceId: string, principalId = `${role}-${workspaceId}`): Actor {
+		return { principalId, displayName: principalId, workspaceId, permissions: [...ROLE_PERMISSIONS[role]], role };
 	}
 
 	/** A second worker over the same store. */

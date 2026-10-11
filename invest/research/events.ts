@@ -17,8 +17,8 @@ export const NEW_WINDOW_DAYS = 30;
 const STAGE = "(?:pre[- ]?seed|seed|series [a-e]\\+?|follow[- ]on|bridge)";
 /** Same words, either case, for the company patterns (which must stay case-sensitive for the name itself). */
 const STAGE_ANYCASE = "(?:[Pp]re[- ]?[Ss]eed|[Ss]eed|[Ss]eries [A-Ea-e]\\+?|[Ff]ollow[- ]on|[Bb]ridge)";
-const MONEY = "\\$\\s?(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s?([kK]|[tT]housand|MM|mm|[mM]|[mM]illion|[bB]n|[bB]|[bB]illion)?";
-const NAME = "([A-Z][A-Za-z0-9&.'’-]*(?:\\s+(?:[A-Z][A-Za-z0-9&.'’-]*|of|the|&|and)){0,3})";
+export const MONEY = "\\$\\s?(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s?([kK]|[tT]housand|MM|mm|[mM]|[mM]illion|[bB]n|[bB]|[bB]illion)?";
+export const NAME = "([A-Z][A-Za-z0-9&'’-]*(?:\\.[A-Za-z0-9&'’-]+)*(?:\\s+(?:[A-Z][A-Za-z0-9&'’-]*(?:\\.[A-Za-z0-9&'’-]+)*|of|the|&|and)){0,3})";
 const INVOLVEMENT = /\b(?:led|co-led|co-leads|leads|participat\w+|joined|invest(?:ed|s|ing)? in|backed|backs|our investment|partner(?:ed|s)? with|alongside|proud to (?:back|support)|excited to (?:back|announce))\b/i;
 const ACQUISITION = /\b(?:acquir(?:e|ed|es|ing)|acquisition of)\b/i;
 const FOLLOW_ON = /\bfollow[- ]on\b/i;
@@ -44,7 +44,7 @@ export function cleanCompanyName(raw: string, firmName: string): string | null {
 	return name;
 }
 
-function toUsd(amount: string, unit: string | undefined): number | null {
+export function toUsd(amount: string, unit: string | undefined): number | null {
 	const n = Number(amount.replace(/,/g, ""));
 	if (!Number.isFinite(n)) return null;
 	const u = (unit ?? "").toLowerCase();
@@ -60,7 +60,7 @@ export function dateInText(sentence: string): string | null {
 	return m ? toIsoDate(`${m[0].replace(/(\d)(?:st|nd|rd|th)/, "$1")} UTC`) : null;
 }
 
-function roundType(sentence: string): { type: EventType; round: string | null } {
+export function roundType(sentence: string): { type: EventType; round: string | null } {
 	const stage = new RegExp(STAGE, "i").exec(sentence)?.[0].toLowerCase().replace(/[- ]+/g, "_").replace(/^pre_?seed$/, "pre_seed") ?? null;
 	const round = stage ? stage.replace(/_/g, " ") : null;
 	if (ACQUISITION.test(sentence)) return { type: "acquisition", round };

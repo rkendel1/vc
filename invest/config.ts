@@ -21,6 +21,7 @@ export type InvestConfig = {
 	documents: { storageDir: string; linkSecret: string; maxBytes: number; allowedTypes: string[]; maxPages: number; parseTimeoutMs: number };
 	evaluation: { timeoutMs: number; maxRetries: number };
 	research: { maxPages: number; maxDepth: number; timeoutMs: number; retries: number; perDomainDelayMs: number; maxBytes: number; maxRedirects: number; userAgent: string; staleAfterDays: number; staleSourceDays: number; announcementLookbackDays: number };
+	sources: { maxBytes: number; maxRecords: number };
 	monitoring: { enabled: boolean; intervalMinutes: number; maxConcurrentFirms: number; leaseMinutes: number; retryBaseMinutes: number };
 };
 
@@ -133,6 +134,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 			staleSourceDays: int(env, "RESEARCH_STALE_SOURCE_DAYS", 14, 1, 365),
 			announcementLookbackDays: int(env, "RESEARCH_ANNOUNCEMENT_LOOKBACK_DAYS", 730, 30, 3650),
 		},
+		sources: {
+			maxBytes: int(env, "SOURCES_MAX_BYTES", 5_000_000, 10_000, 25_000_000),
+			maxRecords: int(env, "SOURCES_MAX_RECORDS", 5_000, 10, 20_000),
+		},
 		monitoring: {
 			enabled: bool(env, "MONITORING_ENABLED", false),
 			intervalMinutes: int(env, "MONITORING_INTERVAL_MINUTES", 1440, 15, 43_200),
@@ -162,5 +167,6 @@ export function describeConfig(config: InvestConfig): Record<string, unknown> {
 		evaluation: config.evaluation,
 		research: { ...config.research },
 		monitoring: config.monitoring,
+		sources: config.sources,
 	};
 }

@@ -49,6 +49,8 @@ for (const file of productionServer) {
 	// Research code (crawl, extraction, verification wording) is network- and storage-free except the fetcher; persistence is the module's job.
 	if (rel.startsWith("research/") && imports(src).some((s) => /(^|\/)store\/store\.ts$|appport\//.test(s))) fail("research-has-no-storage", file, "research/ must not import the store or AppPort");
 	if (rel.startsWith("research/") && /process\.env/.test(src)) fail("research-has-no-env", file, "research/ must not read the environment; configuration is injected");
+	// Cross-workspace scans are an explicit exception: only the scheduler, moderation/publication and the reconciliation read model may use them.
+	if (/\.scanAll\(/.test(src) && !["modules/monitoring.ts", "modules/participation.ts", "modules/reconciliation.ts", "store/store.ts"].includes(rel)) fail("scanall-allowlist", file, "scanAll outside the scheduler, participation or reconciliation modules");
 	// Crawled content is data: nothing under research/ may spawn processes or import dynamic code.
 	if (rel.startsWith("research/") && (imports(src).some((s) => /^(node:)?(child_process|vm|worker_threads)$/.test(s)) || /Bun\.(spawn|\$)\b/.test(src))) fail("research-no-execution", file, "process or code execution");
 	// Secrets are read only by configuration.
@@ -83,9 +85,9 @@ for (const file of web) {
 	const src = await readFile(file, "utf8");
 	for (const spec of imports(src)) {
 		if (!spec.includes("invest/")) continue;
-		const allowed = spec.endsWith("invest/appport/generated/client.ts") || spec.endsWith("invest/domain/types.ts") || spec.endsWith("invest/domain/views.ts") || spec.endsWith("invest/domain/research.ts");
+		const allowed = spec.endsWith("invest/appport/generated/client.ts") || spec.endsWith("invest/domain/types.ts") || spec.endsWith("invest/domain/views.ts") || spec.endsWith("invest/domain/research.ts") || spec.endsWith("invest/domain/collab.ts");
 		if (!allowed) fail("web-imports-only-contract", file, spec);
-		if (spec.endsWith("domain/types.ts") || spec.endsWith("domain/views.ts") || spec.endsWith("domain/research.ts")) {
+		if (spec.endsWith("domain/types.ts") || spec.endsWith("domain/views.ts") || spec.endsWith("domain/research.ts") || spec.endsWith("domain/collab.ts")) {
 			const line = src.split("\n").find((l) => l.includes(spec)) ?? "";
 			if (!/import\s+(type\s|\{\s*(METRIC_KEYS|SOURCE_TYPES|type\s))/.test(line) && !/^import \{[^}]*\} from/.test(line)) fail("web-imports-only-contract", file, `value import from ${spec}`);
 		}

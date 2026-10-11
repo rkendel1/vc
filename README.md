@@ -43,11 +43,13 @@ for anything that matters.
 
 Firms are also **monitored continuously** (VC-3): `bun run monitor -- run --workspace ws-dev` runs one cycle on demand, finds new announcements, source changes and proposed thesis changes, and shows them in a timeline for review without ever modifying investor-approved criteria. See [`docs/invest/VC3_MONITORING.md`](docs/invest/VC3_MONITORING.md). Durable state is declared in [`feltdb.flow`](feltdb.flow).
 
+**Two-sided intelligence (VC-4):** curated third-party sources (`bun run sources -- …`, format adapters for RSS/Atom, CSV and JSON; no provider is built in), conservative entity resolution with reviewer-confirmed matches, per-field reconciliation that never overrides approved values, moderator-verified firm representatives who approve and publish their own criteria, and founders who contribute privately and share by consent. See [`docs/invest/VC4_COLLABORATION.md`](docs/invest/VC4_COLLABORATION.md).
+
 ## Check it
 
 | Command | What it proves |
 | --- | --- |
-| `bun run test` | 153 tests (47 original, 55 for VC-2 research, 51 for VC-3 monitoring):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
+| `bun run test` | 206 tests (47 original, 55 VC-2 research, 51 VC-3 monitoring, 53 VC-4 collaboration):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
 | `bun run typecheck` | Server and web app typecheck |
 | `bun run check:architecture` | The invariants in `docs/invest/PR1_ARCHITECTURE_BASELINE.md` §5 |
 | `bun run generate:check`, `doctor` | Generated manifest/client are current; AppPort doctor is clean |
@@ -63,7 +65,7 @@ apps/invest-web (React)  ──generated AppPort client──▶  /appport (Http
                                                            │  authenticate: AuthBoundry adapter (bearer → principal, workspace, role)
                                                            │  permissionAuthorizer: capability permissions
                                                            ▼
-                                              invest/appport/capabilities.ts  (45 capabilities)
+                                              invest/appport/capabilities.ts  (76 capabilities)
                                                            ▼
                                               invest/service.ts → modules → invest/store (FeltDB 0.11.7)
                                                                         └→ invest/jev (Jev HTTP contract)

@@ -1,0 +1,10 @@
+{
+	"name": "Example Funding News (placeholder)",
+	"canonicalUrl": "https://fundingnews.example.com/feed.xml",
+	"publisher": "Example Funding News",
+	"sourceType": "funding_news",
+	"adapter": "funding_news_feed",
+	"accessBasis": "public_feed",
+	"termsNote": "PLACEHOLDER: replace with where the publisher's terms allow automated reading of this feed. Many publishers restrict reuse; check before registering.",
+	"limitations": "Investors are matched by name only unless a reviewer confirms; headlines vary in structure."
+}

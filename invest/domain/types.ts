@@ -22,7 +22,14 @@ export type Permission =
 	| "review.write"
 	| "decision.record"
 	| "audit.read"
-	| "research.run";
+	| "research.run"
+	| "source.manage"
+	| "contribution.write"
+	| "contribution.share"
+	| "contribution.read_shared"
+	| "profile.claim"
+	| "profile.publish"
+	| "moderation.review";
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
 	"invest.read",
@@ -36,6 +43,13 @@ export const ALL_PERMISSIONS: readonly Permission[] = [
 	"decision.record",
 	"audit.read",
 	"research.run",
+	"source.manage",
+	"contribution.write",
+	"contribution.share",
+	"contribution.read_shared",
+	"profile.claim",
+	"profile.publish",
+	"moderation.review",
 ];
 
 export type Actor = {
@@ -43,6 +57,8 @@ export type Actor = {
 	displayName: string;
 	workspaceId: string;
 	permissions: readonly string[];
+	/** The principal's role from the session (founder, investor_rep, moderator, partner…). Informational; permissions decide access. */
+	role?: string;
 };
 
 // ---------------------------------------------------------------------------

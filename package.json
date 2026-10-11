@@ -14,6 +14,7 @@
 		"seed": "bun invest/scripts/seed-demo.ts",
 		"research": "bun invest/scripts/research-firms.ts",
 		"monitor": "bun invest/scripts/monitor.ts",
+		"sources": "bun invest/scripts/sources.ts",
 		"test": "bun test invest/tests",
 		"typecheck": "tsc -p invest/tsconfig.json && tsc -p apps/invest-web/tsconfig.json",
 		"check:architecture": "bun invest/scripts/check-architecture.ts",

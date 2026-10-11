@@ -1,4 +1,4 @@
-import { newId, sha256Hex } from "../domain/canonical.ts";
+import { newId, newSortableId, sha256Hex } from "../domain/canonical.ts";
 import { conflict, forbidden, invalid, notFound, precondition } from "../domain/errors.ts";
 import {
 	CRITERION_FIELDS,
@@ -224,7 +224,7 @@ export class InvestorResearchModule {
 		const recent = (await this.store.list<ResearchRun>(C.researchRuns, actor.workspaceId, { firmId })).find((r) => r.status === "running" && Date.parse(r.startedAt) > Date.parse(this.store.now()) - RUNNING_WINDOW_MS);
 		if (recent || this.inflight.has(firmId)) throw precondition("Research for this firm is already running");
 		const run: ResearchRun = {
-			id: newId("rr"),
+			id: newSortableId("rr"),
 			workspaceId: actor.workspaceId,
 			firmId,
 			status: "running",
@@ -491,7 +491,7 @@ export class InvestorResearchModule {
 		for (const job of jobs.slice(0, limit)) {
 			const outcome = await verifyStatement(this.deps.jev, job.statement, job.passage, this.deps.jevTimeoutMs, job.name);
 			if (outcome === "not_configured") return { ...summary, skipped: "jev_not_configured" };
-			const record: CriterionVerification = { id: newId("ver"), workspaceId: ws, firmId, criterionId: job.criterionId, eventId: job.eventId, passageHash: job.passageHash, createdAt: this.store.now(), createdBy: actor.principalId, ...outcome };
+			const record: CriterionVerification = { id: newSortableId("ver"), workspaceId: ws, firmId, criterionId: job.criterionId, eventId: job.eventId, passageHash: job.passageHash, createdAt: this.store.now(), createdBy: actor.principalId, ...outcome };
 			await this.store.commit(actor, {
 				writes: [{ collection: C.criterionVerifications, id: record.id, value: record as unknown as Record<string, unknown>, create: true }],
 				audit: [{ eventType: "research.verification_recorded", entityRef: { type: job.eventId ? "investment_event" : "research_criterion", id: (job.eventId ?? job.criterionId)! }, payload: { firmId, criterionId: job.criterionId, eventId: job.eventId, status: record.status, provider: record.jev?.provider ?? null } }],
@@ -507,14 +507,14 @@ export class InvestorResearchModule {
 
 	// ------------------------------------------------------------------ review and approval
 
-	async review(actor: Actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; action: ReviewAction; note: string; correctedValue?: string }): Promise<ResearchReview> {
+	async review(actor: Actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; claimId?: string | null; action: ReviewAction; note: string; correctedValue?: string }): Promise<ResearchReview> {
 		const firm = await this.getFirm(actor, input.firmId);
 		if (!["flag", "dispute", "correct", "note", "confirm", "dismiss"].includes(input.action)) throw invalid("Unknown review action");
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
 		const correctedValue = input.correctedValue?.trim() || null;
 		if (input.action === "correct" && (!correctedValue || correctedValue.length > 200)) throw invalid("A correction needs the corrected value (≤200 characters)");
-		const subjects = [input.criterionId, input.eventId, input.findingId].filter(Boolean);
+		const subjects = [input.criterionId, input.eventId, input.findingId, input.claimId].filter(Boolean);
 		if (subjects.length > 1) throw invalid("A review concerns one criterion, event or finding");
 		if (input.criterionId) {
 			const criterion = await this.store.get<ResearchCriterion>(C.researchCriteria, input.criterionId, actor.workspaceId);
@@ -522,25 +522,37 @@ export class InvestorResearchModule {
 		} else if (input.eventId) {
 			const event = await this.store.get<InvestmentEvent>(C.investmentEvents, input.eventId, actor.workspaceId);
 			if (!event || event.firmId !== firm.id) throw notFound("Event");
+		} else if (input.claimId) {
+			const claim = await this.store.get<{ firmId: string }>(C.claims, input.claimId, actor.workspaceId);
+			if (!claim || claim.firmId !== firm.id) throw notFound("Claim");
 		} else if (input.findingId) {
 			const finding = await this.store.get<ResearchFinding>(C.researchFindings, input.findingId, actor.workspaceId);
 			if (!finding || finding.firmId !== firm.id) throw notFound("Finding");
 		} else if (input.action === "correct" || input.action === "confirm" || input.action === "dismiss") throw invalid(`${input.action} must name what it concerns`);
-		const record: ResearchReview = { id: newId("rev"), workspaceId: actor.workspaceId, firmId: firm.id, criterionId: input.criterionId ?? null, eventId: input.eventId ?? null, findingId: input.findingId ?? null, action: input.action, note, correctedValue: input.action === "correct" ? correctedValue : null, createdAt: this.store.now(), createdBy: actor.principalId };
+		const record: ResearchReview = { id: newSortableId("rev"), workspaceId: actor.workspaceId, firmId: firm.id, criterionId: input.criterionId ?? null, eventId: input.eventId ?? null, findingId: input.findingId ?? null, claimId: input.claimId ?? null, action: input.action, note, correctedValue: input.action === "correct" ? correctedValue : null, createdAt: this.store.now(), createdBy: actor.principalId };
 		await this.store.commit(actor, {
 			writes: [{ collection: C.researchReviews, id: record.id, value: record as unknown as Record<string, unknown>, create: true }],
-			audit: [{ eventType: "research.review_recorded", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId: firm.id, criterionId: record.criterionId, eventId: record.eventId, findingId: record.findingId, action: record.action, reviewId: record.id } }],
+			audit: [{ eventType: "research.review_recorded", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId: firm.id, criterionId: record.criterionId, eventId: record.eventId, findingId: record.findingId, claimId: record.claimId ?? null, action: record.action, reviewId: record.id } }],
 		});
 		return record;
 	}
 
-	private async approvalsFor(actor: Actor, firmId: string): Promise<FirmApproval[]> {
+	async approvalsFor(actor: Actor, firmId: string): Promise<FirmApproval[]> {
 		return (await this.store.list<FirmApproval>(C.firmApprovals, actor.workspaceId, { firmId })).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 	}
 
 	/** An investor adopts a value as verified. Written only on an explicit human request; the research criterion it came from is untouched. */
 	async approve(actor: Actor, input: { firmId: string; criterionId?: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; note: string }): Promise<FirmApproval> {
 		if (!actor.permissions.includes("thesis.approve")) throw forbidden("Approving firm criteria needs the thesis.approve permission");
+		return this.approveWith(actor, input, { authority: "workspace", claimId: null });
+	}
+
+	/**
+	 * The approval itself. `authority` says who is speaking: this workspace, or a verified representative of
+	 * the firm (the caller, `ParticipationModule`, has already checked the verified claim). A third-party claim
+	 * can be adopted as the basis (`basisClaimId`): the claim is not changed, and the approval is a new record.
+	 */
+	async approveWith(actor: Actor, input: { firmId: string; criterionId?: string; basisClaimId?: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; note: string }, who: { authority: "workspace" | "firm_representative"; claimId: string | null }): Promise<FirmApproval> {
 		const firm = await this.getFirm(actor, input.firmId);
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
@@ -548,7 +560,15 @@ export class InvestorResearchModule {
 		let polarity: "include" | "exclude";
 		let value: string;
 		let valueRange: FirmApproval["valueRange"] = null;
-		if (input.criterionId) {
+		if (input.basisClaimId) {
+			const cl = await this.store.get<{ firmId: string; field: CriterionField; polarity: "include" | "exclude"; value: string; valueRange: FirmApproval["valueRange"]; assertionType: string }>(C.claims, input.basisClaimId, actor.workspaceId);
+			if (!cl || cl.firmId !== firm.id) throw notFound("Claim");
+			if (cl.assertionType === "inferred") throw invalid("An inferred claim is not a stated criterion");
+			field = cl.field;
+			polarity = cl.polarity;
+			value = cl.value;
+			valueRange = cl.valueRange;
+		} else if (input.criterionId) {
 			const c = await this.store.get<ResearchCriterion>(C.researchCriteria, input.criterionId, actor.workspaceId);
 			if (!c || c.firmId !== firm.id) throw notFound("Criterion");
 			if (c.assertionType === "inferred") throw invalid("A portfolio-derived pattern is not a stated criterion; enter the value yourself if you want to approve it");
@@ -581,21 +601,26 @@ export class InvestorResearchModule {
 		}
 		const approvals = await this.approvalsFor(actor, firm.id);
 		if (currentApprovals(approvals).some((a) => a.field === field && a.polarity === polarity && a.value === value)) throw precondition("This value is already approved");
-		const record: FirmApproval = { id: newId("fa"), workspaceId: actor.workspaceId, firmId: firm.id, kind: "approve", field, polarity, value, valueRange, basisCriterionId: input.criterionId ?? null, withdrawsId: null, note, createdAt: this.store.now(), createdBy: actor.principalId };
-		await this.commitApproval(actor, firm, record, approvals, "firm.criterion_approved");
+		const record: FirmApproval = { id: newSortableId("fa"), workspaceId: actor.workspaceId, firmId: firm.id, kind: "approve", field, polarity, value, valueRange, basisCriterionId: input.criterionId ?? input.basisClaimId ?? null, withdrawsId: null, authority: who.authority, representativeClaimId: who.claimId, note, createdAt: this.store.now(), createdBy: actor.principalId };
+		await this.commitApproval(actor, firm, record, approvals, who.authority === "firm_representative" ? "profile.criterion_approved" : "firm.criterion_approved");
 		return record;
 	}
 
 	async withdraw(actor: Actor, input: { firmId: string; approvalId: string; note: string }): Promise<FirmApproval> {
 		if (!actor.permissions.includes("thesis.approve")) throw forbidden("Withdrawing approved criteria needs the thesis.approve permission");
+		return this.withdrawWith(actor, input, "workspace");
+	}
+
+	async withdrawWith(actor: Actor, input: { firmId: string; approvalId: string; note: string }, authority: "workspace" | "firm_representative"): Promise<FirmApproval> {
 		const firm = await this.getFirm(actor, input.firmId);
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
 		const approvals = await this.approvalsFor(actor, firm.id);
 		const target = currentApprovals(approvals).find((a) => a.id === input.approvalId);
 		if (!target) throw notFound("Approval");
-		const record: FirmApproval = { ...target, id: newId("fa"), kind: "withdraw", withdrawsId: target.id, note, createdAt: this.store.now(), createdBy: actor.principalId };
-		await this.commitApproval(actor, firm, record, approvals, "firm.criterion_withdrawn");
+		if ((target.authority ?? "workspace") !== authority) throw forbidden("This approval was made by a different authority and cannot be withdrawn from here");
+		const record: FirmApproval = { ...target, id: newSortableId("fa"), kind: "withdraw", withdrawsId: target.id, note, createdAt: this.store.now(), createdBy: actor.principalId };
+		await this.commitApproval(actor, firm, record, approvals, authority === "firm_representative" ? "profile.criterion_withdrawn" : "firm.criterion_withdrawn");
 		return record;
 	}
 
@@ -684,7 +709,7 @@ export class InvestorResearchModule {
 			this.store.list<EventEvidence>(C.eventEvidence, ws, { firmId }),
 			this.store.list<ResearchFinding>(C.researchFindings, ws, { firmId }),
 		]);
-		runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+		runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
 		const sourceById = new Map(sources.map((s) => [s.id, s]));
 		const lastSeen = new Map<string, string>();
 		for (const r of runs.filter((r) => r.status === "completed" && r.completedAt)) for (const id of r.criterionIds) if (!lastSeen.has(id) || r.completedAt! > lastSeen.get(id)!) lastSeen.set(id, r.completedAt!);
@@ -692,7 +717,7 @@ export class InvestorResearchModule {
 		const carried = new Set(runs.find((r) => r.status === "completed" && r.id === firm.lastRunId)?.carriedCriterionIds ?? []);
 		const view = (c: ResearchCriterion): CriterionView => {
 			const applicable = verifiable(c);
-			const latest = verifications.filter((v) => v.criterionId === c.id && v.passageHash === c.passageHash).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+			const latest = verifications.filter((v) => v.criterionId === c.id && v.passageHash === c.passageHash).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0] ?? null;
 			const lastConfirmedAt = lastSeen.get(c.id) ?? c.capturedAt;
 			const s = sourceById.get(c.sourceId);
 			return {
@@ -704,7 +729,7 @@ export class InvestorResearchModule {
 				freshness: this.isStale(lastConfirmedAt) ? "stale" : "fresh",
 				lastConfirmedAt,
 				current: current.has(c.id),
-				reviews: reviews.filter((r) => r.criterionId === c.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+				reviews: reviews.filter((r) => r.criterionId === c.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)),
 				source: s ? { id: s.id, requestedUrl: s.requestedUrl, finalUrl: s.finalUrl, title: s.title, pageKind: s.pageKind, firstRetrievedAt: s.firstRetrievedAt } : null,
 			};
 		};
@@ -715,9 +740,9 @@ export class InvestorResearchModule {
 		const eventViews = events
 			.map((e): InvestmentEventView => {
 				const ev = evidence.filter((x) => x.eventId === e.id).sort((a, b) => a.discoveredAt.localeCompare(b.discoveredAt));
-				const rv = reviews.filter((r) => r.eventId === e.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+				const rv = reviews.filter((r) => r.eventId === e.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
 				const first = ev[0];
-				const vlatest = verifications.filter((v) => v.eventId === e.id && (!first || v.passageHash === first.passageHash)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+				const vlatest = verifications.filter((v) => v.eventId === e.id && (!first || v.passageHash === first.passageHash)).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0] ?? null;
 				const published = ev.map((x) => x.publishedAt).filter(Boolean).sort() as string[];
 				return {
 					...e,
@@ -739,7 +764,7 @@ export class InvestorResearchModule {
 			.sort((a, b) => b.discoveredAt.localeCompare(a.discoveredAt));
 		const findingViews = findings
 			.map((f) => {
-				const rv = reviews.filter((r) => r.findingId === f.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+				const rv = reviews.filter((r) => r.findingId === f.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
 				const crits = f.newCriterionIds.map((id) => views.find((v) => v.id === id)).filter(Boolean) as CriterionView[];
 				const verification: VerificationStatus = !crits.length ? "pending" : crits.every((c) => c.verification === "source_supports") ? "source_supports" : crits.some((c) => c.verification === "source_does_not_support") ? "source_does_not_support" : crits.some((c) => c.verification === "verification_error") ? "verification_error" : crits.some((c) => c.verification === "inconclusive") ? "inconclusive" : "pending";
 				return { ...f, reviews: rv, reviewState: reviewStateOf(rv, f.reviewRequired ? "needs_review" : "unreviewed"), verification };
@@ -770,7 +795,7 @@ export class InvestorResearchModule {
 			approvedCurrent,
 			sources: sources.sort((a, b) => b.firstRetrievedAt.localeCompare(a.firstRetrievedAt)),
 			runs,
-			reviews: reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+			reviews: reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)),
 			staleAfterDays: this.deps.staleAfterDays,
 			stale: this.isStale(lastSuccessAt ?? firm.lastResearchedAt),
 			monitoring: target,

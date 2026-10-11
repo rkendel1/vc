@@ -231,6 +231,101 @@ try {
 	check(await page.isVisible("td:has-text('review.override')"), "the override and decision are in the audit trail");
 	check(await page.isVisible("td:has-text('firm.criterion_approved')"), "the research approval is in the audit trail");
 
+	console.log("collaboration: representative, moderator, founder");
+	const signIn = async (token: string, waitFor: string) => {
+		await page.evaluate(() => { window.location.hash = "#/"; }); // leave any record page: its id belongs to the session being closed
+		await page.click("text=Sign out");
+		await page.fill("input[type=password]", token);
+		await page.click("button[type=submit]");
+		await page.waitForSelector(waitFor);
+		await page.click("nav >> text=Investors");
+		await page.click("role=tab[name='Directory']");
+	};
+	const toDirectory = async () => {
+		await page.click("nav >> text=Investors");
+		await page.click("role=tab[name='Directory']");
+	};
+	for (const ws of ["ws-rep", "ws-f"]) {
+		const { firm } = await research.reconcile(actor(ws), { url: "alpine.vc" });
+		await research.research(actor(ws), firm.id, { verify: false });
+	}
+	// the representative asks to represent the firm: signing up grants nothing
+	await signIn(TOKENS.rRep, "text=Meridian representatives");
+	await page.click("role=tab[name='Claims & published profiles']");
+	await page.fill("[data-testid=request-claim] input >> nth=0", "alpine.vc");
+	await page.fill("[data-testid=request-claim] input >> nth=1", "Alpine Ventures");
+	await page.fill("[data-testid=request-claim] textarea", "Partner at Alpine Ventures; listed on the team page.");
+	await page.click("text=Request to represent this firm");
+	await page.waitForSelector("[data-testid=my-claim]");
+	check(await page.isVisible("[data-testid=my-claim] >> text=requested"), "a claim starts as requested, not verified");
+	const challenge = (await page.locator("[data-testid=my-claim] code.digest").innerText()).trim();
+	sites["alpine.vc"]["/.well-known/attn-invest-claim.txt"] = { type: "text/plain", body: challenge };
+	await page.click("button:has-text('Check the proof')");
+	await page.waitForSelector("text=The challenge was found at the well-known path.");
+	await toDirectory();
+	await page.click("a:has-text('Alpine Ventures')");
+	await page.waitForSelector("[data-testid=no-authority]");
+	check(true, "a proof alone gives no authority: the representative cannot approve or publish yet");
+	// a founder keeps a private contribution
+	await signIn(TOKENS.fFounder, "text=Founder workspace");
+	await page.click("a:has-text('Alpine Ventures')");
+	await page.waitForSelector("[data-testid=contribution-form]");
+	await page.selectOption("[data-testid=contribution-form] select >> nth=1", "check_size");
+	await page.fill("[data-testid=contribution-form] input[type=number] >> nth=0", "100000");
+	await page.fill("[data-testid=contribution-form] input[type=number] >> nth=1", "400000");
+	await page.fill("[data-testid=contribution-form] textarea", "Their partner told me their cheques are 100 to 400 thousand.");
+	await page.click("text=Save privately");
+	await page.waitForSelector("text=Saved privately.");
+	await toDirectory();
+	await page.click("role=tab[name='Contributions']");
+	await page.waitForSelector("[data-testid=my-contribution]");
+	check(await page.isVisible("[data-testid=my-contribution] .tag >> text=Private"), "a founder contribution is private by default");
+	check(await page.isVisible("text=Share with moderators"), "sharing is an explicit, separate choice");
+	await page.click("text=Share with moderators");
+	await page.waitForSelector("text=Stop sharing with moderators");
+	// the moderator verifies the representative, and sees only what was shared
+	await signIn(TOKENS.mModerator, "text=Platform moderation");
+	await page.click("role=tab[name='Inbox']");
+	await page.waitForSelector("[data-testid=claim-review]");
+	check(await page.isVisible("[data-testid=claim-review] >> text=found at the well-known path"), "the moderator sees the domain proof as evidence");
+	check(await page.isVisible("[data-testid=shared-contribution] >> text=The author is not identified"), "a shared contribution is shown without identifying its author");
+	await page.fill("[data-testid=shared-contribution] input", "Not corroborated by a second source.");
+	await page.click("[data-testid=shared-contribution] button:has-text('Dispute')");
+	await page.fill("[data-testid=claim-review] input >> nth=1", "Domain proof succeeded; partner is on the team page.");
+	await page.click("text=Verify as representative");
+	await page.waitForSelector("text=No representative claims are waiting.");
+	check(true, "a moderator verifies the claim with a rationale");
+	// the verified representative approves as the firm and publishes
+	await signIn(TOKENS.rRep, "text=Meridian representatives");
+	await page.click("a:has-text('Alpine Ventures')");
+	await page.waitForSelector("[data-testid=authority]");
+	await page.click("summary:has-text('check size')");
+	await page.click("details[open] >> text=Approve as the firm…");
+	await page.fill("details[open] label:has-text('Why you approve') input", "Our published range.");
+	await page.click("details[open] >> text=Approve as the firm");
+	await page.waitForSelector("text=Approved by the firm's verified representative");
+	await page.check("[data-testid=authority] input[type=checkbox]");
+	await page.click("text=Publish selected criteria");
+	await page.waitForSelector("[data-testid=profile-history] >> text=Published version 1");
+	check(true, "a verified representative approves a criterion as the firm and publishes it");
+	// another fund sees the published layer only, and the firm's page marks it as the firm's own statement
+	await signIn(TOKENS.aPartner, "text=Fund A");
+	await page.click("role=tab[name='Claims & published profiles']");
+	await page.waitForSelector("td:has-text('Alpine Ventures')");
+	check(!(await page.isVisible("text=Their partner told me")), "a founder's private note is not visible to another workspace");
+	await toDirectory();
+	await page.click("a:has-text('Alpine Ventures')");
+	await page.waitForSelector("[data-testid=published-note]");
+	check(await page.isVisible("[data-testid=published-note] >> text=Other sources do not override it"), "the published profile is shown as the firm's own, and not overridable");
+	await page.click("[data-testid=field-check_size] summary");
+	check(await page.isVisible("[data-testid=field-check_size] .tag.cat-investor_verified"), "claims keep separate provenance labels per category");
+	await snap("e2e-reconciliation");
+	// the founder sees the dispute and that the contribution was kept
+	await signIn(TOKENS.fFounder, "text=Founder workspace");
+	await page.click("role=tab[name='Contributions']");
+	await page.waitForSelector("text=Your contribution and evidence are kept.");
+	check(await page.isVisible("[data-testid=my-contribution] >> text=Not corroborated by a second source."), "a dispute is shown with its reason; the contribution stays");
+
 	console.log("isolation in the browser");
 	await page.click("text=Sign out");
 	await page.fill("input[type=password]", TOKENS.bPartner);

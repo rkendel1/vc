@@ -2,6 +2,8 @@ import { type FormEvent, useState } from "react";
 import { RESEARCH_STATUSES, type AttentionItem, type CriterionView, type FirmListItem, type FirmProfile, type MonitoringTarget, type ResearchSource, type ResearchStatus, type TimelineItem } from "../../../../invest/domain/research.ts";
 import { call } from "../api.ts";
 import { ErrorNote, Loading, PageHead, Section, href, useAction, useCan, useLoad, when } from "../ui.tsx";
+import { ApproveAsFirmButton, ContributionForm, ProfileHistorySection, ReconciliationSection, RepresentativePanel } from "./Collaboration.tsx";
+import { ClaimsPanel, ContributionsPanel, InboxPanel, SourcesPanel } from "./Hub.tsx";
 
 const STATUS_LABEL: Record<ResearchStatus, string> = {
 	pending: "Not researched yet",
@@ -63,14 +65,38 @@ function UrlText({ url }: { url: string }) {
 	);
 }
 
+const TABS = [
+	{ id: "directory", label: "Directory" },
+	{ id: "inbox", label: "Inbox" },
+	{ id: "sources", label: "Sources" },
+	{ id: "claims", label: "Claims & published profiles" },
+	{ id: "contributions", label: "Contributions" },
+] as const;
+
 export function InvestorsScreen() {
+	const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("directory");
+	return (
+		<>
+			<PageHead title="Investors" sub="Public-source research on venture firms, curated sources, and what firms and founders contribute. Findings here are not investor-approved theses." />
+			<div className="tabs" role="tablist" aria-label="Investor intelligence">
+				{TABS.map((t) => (
+					<button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
+						{t.label}
+					</button>
+				))}
+			</div>
+			{tab === "directory" ? <DirectoryTab /> : tab === "inbox" ? <InboxPanel /> : tab === "sources" ? <SourcesPanel /> : tab === "claims" ? <ClaimsPanel /> : <ContributionsPanel />}
+		</>
+	);
+}
+
+function DirectoryTab() {
 	const [query, setQuery] = useState("");
 	const [status, setStatus] = useState<ResearchStatus | "">("");
 	const { data, error, loading } = useLoad(() => call<{ items: FirmListItem[] }>("firm.list", { ...(query.trim() ? { query: query.trim() } : {}), ...(status ? { status } : {}) }).then((r) => r.items), [query, status]);
 	const attention = useLoad(() => call<{ items: AttentionItem[] }>("attention.list", {}).then((r) => r.items), []);
 	return (
 		<>
-			<PageHead title="Investors" sub="Public-source research on venture firms. Findings here are not investor-approved theses." />
 			<AttentionPanel items={attention.data ?? []} />
 			<div className="row" style={{ marginBottom: 12 }}>
 				<label className="field">
@@ -192,7 +218,7 @@ function ReviewForm({ firmId, criterion, onDone }: { firmId: string; criterion: 
 	);
 }
 
-function CriterionRow({ firmId, c, canReview, canApprove, reload }: { firmId: string; c: CriterionView; canReview: boolean; canApprove: boolean; reload: () => void }) {
+function CriterionRow({ firmId, c, canReview, canApprove, reload, domain }: { firmId: string; c: CriterionView; canReview: boolean; canApprove: boolean; reload: () => void; domain?: string }) {
 	const approve = useAction();
 	const [note, setNote] = useState("");
 	const [confirming, setConfirming] = useState(false);
@@ -256,6 +282,7 @@ function CriterionRow({ firmId, c, canReview, canApprove, reload }: { firmId: st
 					</ul>
 				) : null}
 				{canReview ? <ReviewForm firmId={firmId} criterion={c} onDone={reload} /> : null}
+				{domain && c.assertionType !== "inferred" && c.field !== "application_requirements" ? <ApproveAsFirmButton firmId={firmId} criterionId={c.id} domain={domain} reload={reload} /> : null}
 				{canApprove && c.assertionType !== "inferred" && c.field !== "application_requirements" ? (
 					<div className="stack">
 						{confirming ? (
@@ -323,6 +350,11 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 	const refresh = useAction();
 	const verify = useAction();
 	const [verifyNote, setVerifyNote] = useState<string | null>(null);
+	const [bump, setBump] = useState(0);
+	const reloadAll = () => {
+		setBump((b) => b + 1);
+		reload();
+	};
 	if (loading && !data) return <Loading what="investor" />;
 	if (!data) return <ErrorNote error={error} />;
 	const p = data;
@@ -401,12 +433,12 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 				</Section>
 			) : null}
 
-			<Section title="Investor-verified criteria">
+			<Section title="Approved criteria">
 				{p.approvedCurrent.length ? (
 					<ul className="timeline">
 						{p.approvedCurrent.map((a) => (
 							<li key={a.id}>
-								<strong>{a.polarity === "exclude" ? "Excludes " : ""}{a.field.replace(/_/g, " ")}: {a.valueRange ? usdRange(a.valueRange) : a.value.replace(/_/g, " ")}</strong> — approved by {a.createdBy}, {when(a.createdAt)}. {a.note}
+								<strong>{a.polarity === "exclude" ? "Excludes " : ""}{a.field.replace(/_/g, " ")}: {a.valueRange ? usdRange(a.valueRange) : a.value.replace(/_/g, " ")}</strong> — {a.authority === "firm_representative" ? <span className="tag cat-investor_verified">Approved by the firm's verified representative</span> : <span className="tag">Approved by this workspace</span>} {a.createdBy}, {when(a.createdAt)}. {a.note}
 								{canApprove ? (
 									<>
 										{" "}
@@ -427,7 +459,7 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 						<p className="muted small">{ASSERTION_TITLE[k].help}</p>
 						<div className="stack">
 							{items.map((c) => (
-								<CriterionRow key={c.id} firmId={firmId} c={c} canReview={canReview} canApprove={canApprove} reload={reload} />
+								<CriterionRow key={c.id} firmId={firmId} c={c} canReview={canReview} canApprove={canApprove} reload={reloadAll} domain={p.firm.canonicalDomain} />
 							))}
 						</div>
 					</Section>
@@ -435,6 +467,13 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 			)}
 			{!p.criteria.length && !p.stub ? <p className="empty">No criteria in the latest run.</p> : null}
 
+			<ReconciliationSection firmId={firmId} canReview={canReview} version={p.runs.length + p.findings.length + p.events.length + p.reviews.length + p.approvals.length + bump} />
+			<RepresentativePanel firmId={firmId} domain={p.firm.canonicalDomain} approvals={p.approvals} reload={reloadAll} />
+			<ProfileHistorySection firmId={firmId} version={p.approvals.length + bump} />
+			<Section title="Contribute">
+				<p className="muted small">Add a correction, firsthand knowledge or a note about this firm. It stays private to your workspace until you share it.</p>
+				<ContributionForm domain={p.firm.canonicalDomain} />
+			</Section>
 			<MonitoringSection p={p} canRun={canRun} reload={reload} />
 			<TimelineSection firmId={firmId} canReview={canReview} version={p.runs.length + p.findings.length + p.events.length + p.reviews.length} reload={reload} />
 

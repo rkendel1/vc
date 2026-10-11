@@ -13,7 +13,7 @@ import { sentences } from "./html.ts";
  */
 export const EXTRACTOR_VERSION = "invest-research-rules/1.1.0";
 
-const STAGES: [string, RegExp][] = [
+export const STAGES: [string, RegExp][] = [
 	["pre_seed", /\bpre[- ]?seed\b/i],
 	["seed", /(?<!pre[- ]?)\bseed\b/i],
 	["series_a", /\bseries[- ]a\b/i],
@@ -24,7 +24,7 @@ const STAGES: [string, RegExp][] = [
 	["late_stage", /\blate[- ]stage\b/i],
 ];
 
-const SECTORS: [string, RegExp][] = [
+export const SECTORS: [string, RegExp][] = [
 	["fintech", /\b(fintech|financial technology|financial services|payments|banking)\b/i],
 	["healthcare", /\b(healthcare|health care|healthtech|digital health|medtech|medical devices?)\b/i],
 	["biotech", /\b(biotech(?:nology)?|life sciences?|therapeutics|drug discovery)\b/i],
@@ -48,7 +48,7 @@ const SECTORS: [string, RegExp][] = [
 	["legal_govtech", /\b(legal tech|govtech|civic tech)\b/i],
 ];
 
-const GEOGRAPHIES: [string, RegExp][] = [
+export const GEOGRAPHIES: [string, RegExp][] = [
 	["united_states", /\b(?:united states|usa|u\.s\.a?)(?![a-z])|\bus[- ](?:based|companies|founders|startups)\b/i],
 	["north_america", /\bnorth america(?:n)?\b/i],
 	["canada", /\bcanad(?:a|ian)\b/i],

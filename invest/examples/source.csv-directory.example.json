@@ -1,0 +1,11 @@
+{
+	"name": "Example Investor Directory (placeholder)",
+	"canonicalUrl": "https://directory.example.com/investors.csv",
+	"publisher": "Example Directory",
+	"sourceType": "directory",
+	"adapter": "csv_dataset",
+	"accessBasis": "licensed_dataset",
+	"termsNote": "PLACEHOLDER: replace with the licence or terms page that permits automated retrieval of this dataset, and what it requires (attribution, rate).",
+	"limitations": "Updated by the publisher; check sizes may be absent for some rows.",
+	"mapping": { "idField": "id", "nameField": "name", "websiteField": "website", "stageField": "stage", "sectorsField": "sectors", "geographyField": "geo", "checkMinField": "min_k", "checkMaxField": "max_k", "checkUnit": "thousands", "updatedField": "updated", "listDelimiter": ";" }
+}

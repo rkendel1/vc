@@ -40,6 +40,20 @@ export const C = {
 	investmentEvents: "investment_events",
 	eventEvidence: "event_evidence",
 	researchFindings: "research_findings",
+	curatedSources: "curated_sources",
+	sourceRuns: "source_runs",
+	sourceSnapshots: "source_snapshots",
+	sourceRecords: "source_records",
+	entities: "entities",
+	entityMatches: "entity_matches",
+	matchDecisions: "match_decisions",
+	claims: "claims",
+	representativeClaims: "representative_claims",
+	claimEvents: "claim_events",
+	contributions: "contributions",
+	contributionShares: "contribution_shares",
+	publishedProfiles: "published_profiles",
+	contributionResponses: "contribution_responses",
 } as const;
 export type CollectionName = (typeof C)[keyof typeof C];
 

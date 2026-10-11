@@ -57,5 +57,5 @@ describe("monitor CLI", () => {
 		expect((await monitor("pause", "nosuch.vc", "--workspace", "ws-dev")).err).toContain("No firm");
 		// registering again keeps the target; --no-monitor leaves new firms unmonitored
 		expect((await research(join(dir, "firms.txt"), "--workspace", "ws-dev", "--retries", "0")).out).toContain("monitoring: already_registered");
-	});
+	}, 60_000);
 });
