@@ -82,7 +82,7 @@ export function WorkspaceScreen() {
 	const noTheses = !data.theses.some((t) => t.versionCount > 0);
 	return (
 		<>
-			<PageHead title={session.principal.workspaceName} sub={<JevLine jev={data.jev} />} />
+			<PageHead title="Overview" sub={`Startup evaluations in ${session.principal.workspaceName}: what needs a reviewer, what is running, and who is still missing evidence.`} />
 			{noTheses ? (
 				<div className="note warn">
 					No approved thesis yet. <a href={href("theses")}>Write and approve your investment thesis</a> before running evaluations.

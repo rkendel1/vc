@@ -372,6 +372,8 @@ export type ReconciliationConflict = {
 	claimKeys: string[];
 	approvalIds: string[];
 	reviewState: "unresolved" | "disputed" | "accepted" | "rejected";
+	/** Set when authority already settles it: an approved value stands over a disagreeing source. The disagreement stays listed but is not an open conflict. */
+	resolution: "approved_value_stands" | null;
 	reasons: string[];
 };
 

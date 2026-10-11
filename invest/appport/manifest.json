@@ -4106,6 +4106,7 @@
           "total": {},
           "shown": {},
           "empty": {},
+          "universe": {},
           "profileVersion": {},
           "policyVersion": {},
           "evaluatedAt": {}
@@ -4116,6 +4117,7 @@
           "total",
           "shown",
           "empty",
+          "universe",
           "profileVersion",
           "policyVersion",
           "evaluatedAt"
@@ -4227,6 +4229,7 @@
               "total": {},
               "shown": {},
               "empty": {},
+              "universe": {},
               "profileVersion": {},
               "policyVersion": {},
               "evaluatedAt": {}
@@ -4237,6 +4240,7 @@
               "total",
               "shown",
               "empty",
+              "universe",
               "profileVersion",
               "policyVersion",
               "evaluatedAt"
@@ -5156,12 +5160,14 @@
         "type": "object",
         "properties": {
           "claim": {},
-          "status": {}
+          "status": {},
+          "firmId": {}
         },
         "additionalProperties": false,
         "required": [
           "claim",
-          "status"
+          "status",
+          "firmId"
         ]
       },
       "authorization": [
@@ -5200,12 +5206,14 @@
             "type": "object",
             "properties": {
               "claim": {},
-              "status": {}
+              "status": {},
+              "firmId": {}
             },
             "additionalProperties": false,
             "required": [
               "claim",
-              "status"
+              "status",
+              "firmId"
             ]
           },
           "authorization": [

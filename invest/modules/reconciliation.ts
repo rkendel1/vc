@@ -103,7 +103,7 @@ export class ReconciliationModule {
 		const now = this.store.now();
 		const fields = reconcile({ claims: inClaims, approvals, now, staleAfterDays: this.deps.staleAfterDays });
 		const count = (cat: SourceCategory) => inClaims.filter((c) => c.category === cat).length;
-		return { firm, fields, published, counts: Object.fromEntries((["investor_verified", "official_public_source", "third_party_source", "founder_contribution", "community_contribution"] as const).map((c) => [c, count(c)])) as Record<SourceCategory, number>, openConflicts: fields.flatMap((f) => f.conflicts).filter((c) => c.reviewState !== "accepted").length };
+		return { firm, fields, published, counts: Object.fromEntries((["investor_verified", "official_public_source", "third_party_source", "founder_contribution", "community_contribution"] as const).map((c) => [c, count(c)])) as Record<SourceCategory, number>, openConflicts: fields.flatMap((f) => f.conflicts).filter((c) => c.reviewState !== "accepted" && !c.resolution).length };
 	}
 
 	/** Review a reconciled third-party claim. Accepting it records that a person judged the evidence; it never makes it investor-verified. */
@@ -123,7 +123,7 @@ export class ReconciliationModule {
 				const r = await this.forFirm(actor, f.id).catch(() => null);
 				if (!r) continue;
 				for (const field of r.fields) {
-					for (const c of field.conflicts.filter((x) => x.reviewState === "unresolved" || x.reviewState === "disputed")) items.push({ kind: "conflict", title: `${r.firm.name}: ${c.summary}`, detail: c.reasons.join("; "), at: now(this.store), firmId: f.id, refs: { conflictId: c.id } });
+					for (const c of field.conflicts.filter((x) => !x.resolution && (x.reviewState === "unresolved" || x.reviewState === "disputed"))) items.push({ kind: "conflict", title: `${r.firm.name}: ${c.summary}`, detail: c.reasons.join("; "), at: now(this.store), firmId: f.id, refs: { conflictId: c.id } });
 					for (const cl of field.claims.filter((x) => x.lifecycle === "proposed" && x.claimRef.kind === "claim" && x.signals.category === "third_party_source").slice(0, 3)) items.push({ kind: "proposed_claim", title: `${r.firm.name}: ${cl.publisher} says ${field.field.replace(/_/g, " ")} ${cl.label}`, detail: cl.reasons.join("; "), at: cl.signals.capturedAt, firmId: f.id, refs: { claimKey: cl.key, claimId: cl.claimRef.id } });
 				}
 			}

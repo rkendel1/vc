@@ -414,12 +414,13 @@ describe("reconciliation", () => {
 		expect(st.claims.find((c) => c.key === "claim:b")!.reasons.join()).toContain("observed from past activity");
 		expect(st.claims.find((c) => c.key === "claim:c")!.signals.corroboratedBy).toBe(0); // an inferred pattern is never counted as independent corroboration
 	});
-	it("never lets any number of sources override an approved value; the conflict stays open until an authorised change", () => {
+	it("never lets any number of sources override an approved value; the disagreement stays listed, marked as settled by the approved value, until an authorised change", () => {
 		const approved = [{ id: "ap1", field: "check_size" as const, polarity: "include" as const, value: "usd_1000000_2000000", valueRange: { minUsd: 1_000_000, maxUsd: 2_000_000 }, authority: "firm_representative" as const }];
 		const many = ["A", "B", "C", "D", "E"].map((p, i) => claim(`m${i}`, p, { field: "check_size", value: "usd_10000000_20000000", valueRange: { minUsd: 10_000_000, maxUsd: 20_000_000 }, label: "10-20M" }));
 		const r = run(many, approved).find((f) => f.field === "check_size")!;
 		expect(r.conflicts.filter((c) => c.kind === "conflicts_with_approved")).toHaveLength(5);
-		expect(r.status).toBe("conflicted");
+		expect(r.conflicts.every((c) => c.resolution === "approved_value_stands")).toBe(true);
+		expect(r.status).not.toBe("conflicted"); // settled by authority, still listed
 		expect(r.approved).toEqual([{ id: "ap1", authority: "firm_representative", value: "usd_1000000_2000000" }]);
 		expect(r.explanation[0]).toContain("Approved by a verified firm representative");
 		expect(r.conflicts[0]!.reasons.join()).toContain("never overridden");

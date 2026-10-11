@@ -35,7 +35,7 @@ import type {
  *   coverage  — how much of the investor is actually known, and how well?
  * Unknown is a result. A missing criterion is never a mismatch, and a missing document is never a failure.
  */
-export const MATCH_POLICY_VERSION = "match-policy/1";
+export const MATCH_POLICY_VERSION = "match-policy/2";
 export const READINESS_FRAMEWORK_VERSION = "readiness-framework/1";
 export const EVIDENCE_STALE_DAYS = 180;
 export const CORE_FIELDS: readonly ConstraintField[] = ["stage", "sector", "geography", "business_model", "check_size"];
@@ -85,6 +85,8 @@ const COVERS: Record<string, (investor: string, startup: string) => boolean> = {
 void STAGE_ORDER;
 
 const label = (v: string) => v.replace(/_/g, " ");
+/** Who said it, for people: the internal "firm:" key is not shown. */
+const who = (publisher: string) => publisher.replace(/^(firm|contributor):/, "");
 
 export function formatUsd(n: number | null): string {
 	if (n === null) return "any";
@@ -194,7 +196,7 @@ function evaluateSetField(field: Exclude<ConstraintField, "check_size">, values:
 			strength: hard ? "hard" : "soft",
 			startupValue: shown,
 			rationale: hard
-				? `${hitExclude.publisher} excludes ${label(field)} "${hitExclude.label}" (${AUTH_TEXT[hitExclude.authority]}), which the startup's ${shown} falls under.`
+				? `${who(hitExclude.publisher)} excludes ${label(field)} "${hitExclude.label}" (${AUTH_TEXT[hitExclude.authority]}), which the startup's ${shown} falls under.`
 				: `A source excludes ${label(field)} "${hitExclude.label}", but it is ${AUTH_TEXT[hitExclude.authority]}${hitExclude.freshness === "stale" ? " and out of date" : ""}${hitExclude.conflictIds.length ? " and in an open conflict" : ""}. Confirm before ruling this investor out.`,
 			unknownReason: null,
 			decidedBy: decided(hitExclude),
@@ -225,7 +227,7 @@ function evaluateSetField(field: Exclude<ConstraintField, "check_size">, values:
 				status: "compatible",
 				strength: null,
 				startupValue: shown,
-				rationale: `${hit.publisher} lists ${label(field)} "${hit.label}" (${AUTH_TEXT[hit.authority]}); the startup's ${shown} matches.`,
+				rationale: `${who(hit.publisher)} lists ${label(field)} "${hit.label}" (${AUTH_TEXT[hit.authority]}); the startup's ${shown} matches.`,
 				unknownReason: null,
 				decidedBy: decided(hit),
 				considered: considered(facts),
@@ -243,9 +245,9 @@ function evaluateSetField(field: Exclude<ConstraintField, "check_size">, values:
 				strength: hard ? "hard" : "soft",
 				startupValue: shown,
 				rationale: hard
-					? `${first.publisher}'s stated ${label(field)} (${tier.map((f) => f.label).join(", ")}; ${AUTH_TEXT[first.authority]}) does not include ${shown}.`
+					? `${who(first.publisher)}'s stated ${label(field)} (${tier.map((f) => f.label).join(", ")}; ${AUTH_TEXT[first.authority]}) does not include ${shown}.`
 					: t === 0
-						? `${first.publisher} states a focus on ${tier.map((f) => f.label).join(", ")} (${AUTH_TEXT[first.authority]}), which does not include ${shown}. A stated focus is not always an exclusion: confirm before ruling this investor out.`
+						? `${who(first.publisher)} states a focus on ${tier.map((f) => f.label).join(", ")} (${AUTH_TEXT[first.authority]}), which does not include ${shown}. A stated focus is not always an exclusion: confirm before ruling this investor out.`
 						: `A source says ${tier.map((f) => f.label).join(", ")} (${AUTH_TEXT[first.authority]}), which does not include ${shown}. It is not from the investor itself: confirm before ruling this investor out.`,
 				unknownReason: null,
 				decidedBy: decided(first),
@@ -279,7 +281,7 @@ function evaluateCheckSize(profile: ProfileContent, facts: CriterionFact[], open
 				status: "compatible",
 				strength: null,
 				startupValue: shown,
-				rationale: `${fits.publisher}'s check size ${rangeLabel(r)} (${AUTH_TEXT[fits.authority]}) can sit within a ${shown} round.`,
+				rationale: `${who(fits.publisher)}'s check size ${rangeLabel(r)} (${AUTH_TEXT[fits.authority]}) can sit within a ${shown} round.`,
 				unknownReason: null,
 				decidedBy: decided(fits),
 				considered: considered(facts),
@@ -295,7 +297,7 @@ function evaluateCheckSize(profile: ProfileContent, facts: CriterionFact[], open
 				status: "incompatible",
 				strength: hard ? "hard" : "soft",
 				startupValue: shown,
-				rationale: `${first.publisher}'s minimum check ${formatUsd(first.valueRange!.minUsd)} (${AUTH_TEXT[first.authority]}) is larger than the whole ${shown} round.`,
+				rationale: `${who(first.publisher)}'s minimum check ${formatUsd(first.valueRange!.minUsd)} (${AUTH_TEXT[first.authority]}) is larger than the whole ${shown} round.`,
 				unknownReason: null,
 				decidedBy: decided(first),
 				considered: considered(facts),
@@ -404,7 +406,7 @@ export function evaluateEvidenceQuality(profile: ProfileContent, evidence: Match
 	for (const c of claims) counts[c.quality]++;
 	const statement = !claims.length
 		? "No claims are stated yet, so there is nothing to assess."
-		: `${claims.length} claim${claims.length > 1 ? "s" : ""}: ${counts.reviewer_verified + counts.corroborated} independently supported, ${counts.supplied_by_founder} in founder documents only, ${counts.source_cited} citing an unchecked source, ${counts.founder_assertion} founder assertion only${counts.conflicting ? `, ${counts.conflicting} conflicting` : ""}${counts.stale ? `, ${counts.stale} with stale evidence` : ""}.`;
+		: `${claims.length} claim${claims.length > 1 ? "s" : ""}: ${counts.reviewer_verified + counts.corroborated} independently supported, ${counts.supplied_by_founder} in documents the founders provided only, ${counts.source_cited} citing an unchecked source, ${counts.founder_assertion} provided by the founders only${counts.conflicting ? `, ${counts.conflicting} conflicting` : ""}${counts.stale ? `, ${counts.stale} with stale evidence` : ""}.`;
 	return { claims, counts, statement };
 }
 
@@ -551,7 +553,7 @@ export function evaluateCoverage(snapshot: InvestorSnapshot, mandate: MandateRes
 		inferred: "Only patterns observed or inferred from past activity are known.",
 		unknown: "Little or nothing is known about this investor's criteria.",
 	};
-	return { level, flags, fields, limitsPrecision: limits, statement: `${text[level]}${flags.length ? ` Flags: ${flags.join(", ")}.` : ""}${limits ? " Read the mandate result as a partial view." : ""}`, researchedAt: snapshot.lastResearchedAt };
+	return { level, flags, fields, limitsPrecision: limits, statement: `${text[level]}${flags.length ? ` Flags: ${flags.join(", ")}.` : ""}${limits ? " Read the investor-fit result as a partial view." : ""}`, researchedAt: snapshot.lastResearchedAt };
 }
 
 // --------------------------------------------------------------------------- actions

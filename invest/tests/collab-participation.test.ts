@@ -194,8 +194,11 @@ describe("representative approval, publication and the directory", () => {
 		expect(size.claims.some((x) => x.signals.category === "investor_verified" && x.signals.directness === "subject_stated")).toBe(true);
 		const clash = size.conflicts.filter((x) => x.kind === "conflicts_with_approved");
 		expect(clash.length).toBeGreaterThanOrEqual(2); // the website and the directory both disagree with the firm's own approved range
-		expect(clash.every((x) => x.approvalIds.includes(ap.id) && x.reviewState === "unresolved")).toBe(true);
+		expect(clash.every((x) => x.approvalIds.includes(ap.id) && x.reviewState === "unresolved" && x.resolution === "approved_value_stands")).toBe(true);
+		// the approved value settles those; the two outside sources also disagree with each other, and that stays open
+		expect(size.conflicts.filter((x) => !x.resolution).every((x) => x.kind === "check_size_differs")).toBe(true);
 		expect(size.status).toBe("conflicted");
+		expect(size.explanation.join()).toContain("disagree with the approved value");
 		// ws-a holds no approval of its own: the firm's published value is read, not copied or overridden
 		expect((await c.r.research.profile(c.r.A, aFirm.id)).approvals).toEqual([]);
 		// a withdrawn publication stops being the firm's standing value

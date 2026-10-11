@@ -31,7 +31,7 @@ export function AuditScreen() {
 	);
 	return (
 		<>
-			<PageHead title="Audit trail" sub="Every material change, newest first. Entries are append-only and are written in the same transaction as the change they record." />
+			<PageHead title="History" sub="Every material change in this workspace, newest first, with who made it. Entries are append-only and are recorded with the change itself." />
 			<div className="row" style={{ marginBottom: 12 }}>
 				<label className="field">
 					Event type

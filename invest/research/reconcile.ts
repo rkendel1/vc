@@ -9,7 +9,7 @@ import type { CriterionField } from "../domain/research.ts";
  *   directly the subject is speaking, age, freshness, and how many *independent publishers* state the
  *   same value.
  * - An approved criterion (the workspace's, or a verified representative's) is never overridden. Claims
- *   that disagree with it become `conflicts_with_approved` and stay open until an authorised
+ *   that disagree with it become `conflicts_with_approved`: listed, marked `resolution: approved_value_stands`, and not counted as open until an authorised
  *   correction or a new approved version.
  * - Disagreement without a decisive signal stays an unresolved conflict. Unknown is a valid result.
  * - A person rejecting a claim removes it from consideration; accepting claims on both sides records
@@ -98,13 +98,13 @@ export function reconcile(input: { claims: InClaim[]; approvals: InApproval[]; n
 		const byKey = new Map(reconciled.map((r) => [r.key, r]));
 
 		const conflicts: ReconciliationConflict[] = [];
-		const addConflict = (kind: ReconciliationConflict["kind"], summary: string, keys: string[], approvalIds: string[], reasons: string[]) => {
+		const addConflict = (kind: ReconciliationConflict["kind"], summary: string, keys: string[], approvalIds: string[], reasons: string[], resolution: ReconciliationConflict["resolution"] = null) => {
 			const sorted = [...keys].sort();
 			const id = `cf_${sha256Hex([field, kind, sorted.join(","), approvalIds.sort().join(",")].join("|")).slice(0, 20)}`;
 			if (conflicts.some((c) => c.id === id)) return;
 			const states = sorted.map((k) => byKey.get(k)?.lifecycle);
 			const reviewState = states.some((s) => s === "disputed") ? "disputed" : states.length && states.every((s) => s === "accepted") ? "accepted" : "unresolved";
-			conflicts.push({ id, kind, field, summary, claimKeys: sorted, approvalIds, reviewState, reasons });
+			conflicts.push({ id, kind, field, summary, claimKeys: sorted, approvalIds, reviewState, reasons, resolution });
 		};
 		const policy = fieldLive.filter(statesPolicy);
 		// include vs exclude on the same value
@@ -141,15 +141,17 @@ export function reconcile(input: { claims: InClaim[]; approvals: InApproval[]; n
 					(ap.field === "check_size" && ap.valueRange && c.valueRange && c.polarity === "include" && !overlaps(ap.valueRange, c.valueRange)) ||
 					(ap.polarity === "include" && c.polarity === "exclude" && c.value === ap.value) ||
 					(ap.polarity === "exclude" && c.polarity === "include" && c.value === ap.value);
-				if (differs) addConflict("conflicts_with_approved", `${c.publisher} (${c.category.replace(/_/g, " ")}) disagrees with the ${ap.authority === "firm_representative" ? "firm representative's" : "workspace-approved"} ${field.replace(/_/g, " ")}. The approved value stands.`, [claimKey(c)], [ap.id], ["approved values are never overridden by other sources", "an authorised correction or a new approved version is needed"]);
+				if (differs) addConflict("conflicts_with_approved", `${c.publisher} (${c.category.replace(/_/g, " ")}) disagrees with the ${ap.authority === "firm_representative" ? "firm representative's" : "workspace-approved"} ${field.replace(/_/g, " ")}. The approved value stands.`, [claimKey(c)], [ap.id], ["approved values are never overridden by other sources", "an authorised correction or a new approved version is needed"], "approved_value_stands");
 			}
 		}
 
 		const fieldPublishers = new Set(fieldLive.filter((c) => c.assertionType !== "inferred").map(speaker));
 		const corroborated = fieldLive.some((c) => c.assertionType !== "inferred" && publishersFor(c).size >= 2);
-		const open = conflicts.filter((c) => c.reviewState !== "accepted");
+		const open = conflicts.filter((c) => c.reviewState !== "accepted" && !c.resolution);
+		const settled = conflicts.filter((c) => c.resolution);
 		const explanation: string[] = [];
 		for (const ap of fieldApprovals) explanation.push(`${ap.authority === "firm_representative" ? "Approved by a verified firm representative" : "Approved by this workspace"}: ${(ap.label ?? ap.value).replace(/_/g, " ")}. Other sources do not override it.`);
+		if (settled.length) explanation.push(`${settled.length} other source${settled.length === 1 ? " disagrees" : "s disagree"} with the approved value. It stands, and the disagreement stays listed.`);
 		if (!fieldLive.length) explanation.push("No current claims: unknown.");
 		else if (open.length) explanation.push(`${open.length} unresolved conflict(s); nothing was resolved automatically.`);
 		else if (corroborated) explanation.push("Independent publishers agree on at least one value.");

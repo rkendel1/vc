@@ -1,19 +1,10 @@
 import { type FormEvent, useMemo, useRef, useState } from "react";
 import { METRIC_KEYS, SOURCE_TYPES, type Contradiction, type DocumentRecord, type EvidenceView, type InvestmentDecision, type InvestmentThesis, type Startup, type ThesisVersion } from "../../../../invest/domain/types.ts";
 import type { EvaluationListItem } from "../../../../invest/domain/views.ts";
-import { call, fileToBase64, requestKey } from "../api.ts";
+import { call, requestKey } from "../api.ts";
+import { DocumentsPanel, SOURCE_LABEL } from "../components/Documents.tsx";
 import { CoverageBar, ErrorNote, Loading, PageHead, Provenance, Section, Status, Verification, href, metricUnit, money, navigate, useAction, useCan, useLoad, when } from "../ui.tsx";
 
-const SOURCE_LABEL: Record<(typeof SOURCE_TYPES)[number], string> = {
-	founder_deck: "Founder pitch deck",
-	founder_financials: "Founder financials",
-	founder_other: "Other founder material",
-	third_party_report: "Third-party report",
-	customer_reference: "Customer reference",
-	bank_statement: "Bank statement",
-	audited_financials: "Audited financials",
-	data_room_other: "Other data-room file",
-};
 
 type ProfileInput = { name: string; website: string; stage: string; sector: string; description: string; founderClaims: string };
 const toInput = (s?: Startup): ProfileInput => ({
@@ -162,7 +153,6 @@ function location(e: EvidenceView, docs: Map<string, DocumentRecord>): string {
 }
 
 export function StartupScreen({ startupId }: { startupId: string }) {
-	const canUpload = useCan("document.write");
 	const canEdit = useCan("startup.write");
 	const canAttach = useCan("evidence.write");
 	const canRun = useCan("evaluation.run");
@@ -175,14 +165,13 @@ export function StartupScreen({ startupId }: { startupId: string }) {
 	const [filter, setFilter] = useState<"all" | "metrics" | "conflicts" | "founder">("all");
 	const [showSuperseded, setShowSuperseded] = useState(false);
 	const profile = useAction();
-	const upload = useAction();
 	const attach = useAction();
 	const evaluate = useAction();
 	const docAction = useAction();
-	const fileRef = useRef<HTMLInputElement>(null);
-	const [sourceType, setSourceType] = useState<(typeof SOURCE_TYPES)[number]>("founder_deck");
-	const [supersedes, setSupersedes] = useState("");
-	const [lastUpload, setLastUpload] = useState<DocumentRecord | null>(null);
+	const openOriginal = async (documentId: string, page?: number) => {
+		const r = await docAction.run(() => call<{ url: string }>("document.link", { documentId }));
+		if (r) window.open(`${r.url}${page ? `#page=${page}` : ""}`, "_blank", "noopener,noreferrer");
+	};
 	const [runVersion, setRunVersion] = useState("");
 	const [attachForm, setAttachForm] = useState({ claim: "", reference: "", metric: "", value: "" });
 
@@ -199,35 +188,6 @@ export function StartupScreen({ startupId }: { startupId: string }) {
 	if (!data) return <ErrorNote error={error} />;
 	const { startup } = data;
 	const versionChoice = runVersion || versions.data?.find((v) => v.label.endsWith("(in force)"))?.id || versions.data?.[0]?.id || "";
-
-	const doUpload = async (e: FormEvent) => {
-		e.preventDefault();
-		const file = fileRef.current?.files?.[0];
-		if (!file) return;
-		const doc = await upload.run(async () =>
-			(
-				await call<{ document: DocumentRecord }>("document.upload", {
-					startupId,
-					filename: file.name,
-					mediaType: file.type || "application/octet-stream",
-					sourceType,
-					contentBase64: await fileToBase64(file),
-					...(supersedes ? { supersedesDocumentId: supersedes } : {}),
-				})
-			).document,
-		);
-		if (doc) {
-			setLastUpload(doc);
-			if (fileRef.current) fileRef.current.value = "";
-			setSupersedes("");
-			await reload();
-		}
-	};
-
-	const openOriginal = async (documentId: string, page?: number) => {
-		const r = await docAction.run(() => call<{ url: string }>("document.link", { documentId }));
-		if (r) window.open(`${r.url}${page ? `#page=${page}` : ""}`, "_blank", "noopener,noreferrer");
-	};
 
 	return (
 		<>
@@ -327,107 +287,7 @@ export function StartupScreen({ startupId }: { startupId: string }) {
 			</Section>
 
 			<Section title="Documents">
-				{canUpload ? (
-					<form className="row" onSubmit={doUpload} style={{ marginBottom: 12, alignItems: "flex-end" }}>
-						<label className="field">
-							PDF file
-							<input ref={fileRef} type="file" accept="application/pdf,.pdf" required />
-						</label>
-						<label className="field">
-							What it is
-							<select value={sourceType} onChange={(e) => setSourceType(e.target.value as typeof sourceType)}>
-								{SOURCE_TYPES.map((s) => (
-									<option key={s} value={s}>
-										{SOURCE_LABEL[s]}
-									</option>
-								))}
-							</select>
-						</label>
-						<label className="field">
-							Replaces
-							<select value={supersedes} onChange={(e) => setSupersedes(e.target.value)}>
-								<option value="">Nothing (new document)</option>
-								{data.documents
-									.filter((d) => !d.supersededBy && d.ingestionStatus !== "rejected")
-									.map((d) => (
-										<option key={d.id} value={d.id}>
-											{d.filename}
-										</option>
-									))}
-							</select>
-						</label>
-						<button className="primary" disabled={upload.busy}>
-							{upload.busy ? "Reading…" : "Upload"}
-						</button>
-					</form>
-				) : null}
-				<ErrorNote error={upload.error} />
-				{lastUpload ? (
-					<div className={`note ${lastUpload.ingestionStatus === "ingested" ? "ok" : lastUpload.ingestionStatus === "partial" ? "warn" : "error"}`} style={{ marginBottom: 12 }}>
-						{lastUpload.filename}:{" "}
-						{lastUpload.ingestionStatus === "ingested"
-							? `read ${lastUpload.pageCount} page(s), ${lastUpload.claimCount} claim(s) extracted.`
-							: lastUpload.ingestionStatus === "partial"
-								? `partly read: ${lastUpload.ingestionIssues.join("; ")}.`
-								: `not used as evidence: ${lastUpload.ingestionIssues.join("; ")}.`}
-					</div>
-				) : null}
-				<ErrorNote error={docAction.error} />
-				{data.documents.length ? (
-					<table className="list">
-						<thead>
-							<tr>
-								<th>File</th>
-								<th>Source</th>
-								<th>Status</th>
-								<th>Pages read</th>
-								<th>Claims</th>
-								<th>Uploaded</th>
-								<th />
-							</tr>
-						</thead>
-						<tbody>
-							{data.documents.map((d) => (
-								<tr key={d.id}>
-									<td>
-										{d.filename}
-										{d.supersededBy ? <div className="muted small">Replaced by a newer upload</div> : null}
-										{d.purgedAt ? <div className="muted small">Original deleted {when(d.purgedAt)}</div> : null}
-										{d.ingestionIssues.length ? <div className="small verif contradicted">{d.ingestionIssues.join("; ")}</div> : null}
-									</td>
-									<td>{SOURCE_LABEL[d.sourceType]}</td>
-									<td>
-										<Status value={d.ingestionStatus} />
-									</td>
-									<td>{d.pageCount ? `${d.pagesWithText} of ${d.pageCount}` : "—"}</td>
-									<td>{d.claimCount}</td>
-									<td className="muted nowrap">{when(d.uploadedAt)}</td>
-									<td className="nowrap">
-										{d.storageRef && !d.purgedAt ? (
-											<button type="button" className="quiet" onClick={() => openOriginal(d.id)}>
-												Open original
-											</button>
-										) : null}
-										{canUpload && d.storageRef && !d.purgedAt ? (
-											<button
-												type="button"
-												className="quiet danger"
-												onClick={async () => {
-													const reason = window.prompt("Why delete the original? Extracted claims stay for the audit trail.");
-													if (reason && (await docAction.run(() => call("document.purge", { documentId: d.id, reason })))) await reload();
-												}}
-											>
-												Delete original
-											</button>
-										) : null}
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				) : (
-					<p className="empty">No documents yet. Upload the pitch deck, financials, or third-party reports as PDFs.</p>
-				)}
+				<DocumentsPanel startupId={startupId} documents={data.documents} onChanged={reload} audience="fund" />
 			</Section>
 
 			<Section

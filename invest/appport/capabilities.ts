@@ -857,9 +857,19 @@ export const profileClaimRequest = defineCapability({
 	description: "Requests to represent a firm. Returns a challenge to publish at /.well-known/attn-invest-claim.txt. Signing up is not authority: a moderator must verify the claim.",
 	authorization: ["profile.claim"],
 	input: s.object({ domain: s.string(), firmName: s.string(), relationship: s.string() }),
-	output: out("claim", "status"),
-	attributes: contract("idempotent per principal and domain"),
-	handler: run(async (svc, actor, input: { domain: string; firmName: string; relationship: string }) => svc.participation.requestClaim(actor, input)),
+	output: out("claim", "status", "firmId"),
+	attributes: contract("idempotent per principal and domain; also registers the firm in the caller's workspace and starts its research"),
+	handler: run(async (svc, actor, input: { domain: string; firmName: string; relationship: string }) => {
+		const r = await svc.participation.requestClaim(actor, input);
+		// Claiming a firm includes having its profile to review: register it in the representative's workspace and start research once.
+		let firmId: string | null = null;
+		if (actor.permissions.includes("research.run")) {
+			const { firm } = await svc.research.reconcile(actor, { url: r.claim.canonicalDomain, name: r.claim.firmName });
+			firmId = firm.id;
+			if (firm.researchStatus === "pending" && !firm.lastRunId) await svc.research.startRefresh(actor, firm.id).catch(() => undefined);
+		}
+		return { ...r, firmId };
+	}),
 });
 
 export const profileClaimCheck = defineCapability({
@@ -1143,11 +1153,11 @@ export const fitDiscover = defineCapability({
 	description: "Candidate investors for a startup, each with mandate fit, readiness, evidence quality and research coverage kept separate. Computed on demand from the current profile; nothing is stored.",
 	authorization: ["invest.read"],
 	input: s.object({ startupId: id(), filters: s.optional(filtersSchema) }),
-	output: out("candidates", "total", "shown", "empty", "profileVersion", "policyVersion", "evaluatedAt"),
+	output: out("candidates", "total", "shown", "empty", "universe", "profileVersion", "policyVersion", "evaluatedAt"),
 	attributes: contract("read-only"),
 	handler: run(async (svc, actor, input: { startupId: string; filters?: FiltersIn }) => {
 		const r = await svc.matching.discover(actor, { startupId: input.startupId, filters: asFilters(input.filters) });
-		return { candidates: r.candidates, total: r.total, shown: r.shown, empty: r.empty, profileVersion: r.profileVersion, policyVersion: r.policyVersion, evaluatedAt: r.evaluatedAt };
+		return { candidates: r.candidates, total: r.total, shown: r.shown, empty: r.empty, universe: r.universe, profileVersion: r.profileVersion, policyVersion: r.policyVersion, evaluatedAt: r.evaluatedAt };
 	}),
 });
 

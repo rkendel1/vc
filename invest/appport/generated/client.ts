@@ -570,6 +570,7 @@ export type FitDiscoverV1Output = {
   total: unknown;
   shown: unknown;
   empty: unknown;
+  universe: unknown;
   profileVersion: unknown;
   policyVersion: unknown;
   evaluatedAt: unknown;
@@ -711,6 +712,7 @@ export type ProfileClaimRequestV1Input = {
 export type ProfileClaimRequestV1Output = {
   claim: unknown;
   status: unknown;
+  firmId: unknown;
 };
 
 export type ProfileClaimRequestInput = ProfileClaimRequestV1Input;
@@ -5523,6 +5525,7 @@ export const manifest = {
           "total": {},
           "shown": {},
           "empty": {},
+          "universe": {},
           "profileVersion": {},
           "policyVersion": {},
           "evaluatedAt": {}
@@ -5533,6 +5536,7 @@ export const manifest = {
           "total",
           "shown",
           "empty",
+          "universe",
           "profileVersion",
           "policyVersion",
           "evaluatedAt"
@@ -5644,6 +5648,7 @@ export const manifest = {
               "total": {},
               "shown": {},
               "empty": {},
+              "universe": {},
               "profileVersion": {},
               "policyVersion": {},
               "evaluatedAt": {}
@@ -5654,6 +5659,7 @@ export const manifest = {
               "total",
               "shown",
               "empty",
+              "universe",
               "profileVersion",
               "policyVersion",
               "evaluatedAt"
@@ -6573,12 +6579,14 @@ export const manifest = {
         "type": "object",
         "properties": {
           "claim": {},
-          "status": {}
+          "status": {},
+          "firmId": {}
         },
         "additionalProperties": false,
         "required": [
           "claim",
-          "status"
+          "status",
+          "firmId"
         ]
       },
       "authorization": [
@@ -6617,12 +6625,14 @@ export const manifest = {
             "type": "object",
             "properties": {
               "claim": {},
-              "status": {}
+              "status": {},
+              "firmId": {}
             },
             "additionalProperties": false,
             "required": [
               "claim",
-              "status"
+              "status",
+              "firmId"
             ]
           },
           "authorization": [

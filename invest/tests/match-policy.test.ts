@@ -301,7 +301,7 @@ describe("determinism and the absence of a score", () => {
 		expect(JSON.stringify(a)).toBe(JSON.stringify(b));
 		expect(Object.keys(a).sort()).toEqual(["actions", "coverage", "evidenceQuality", "labels", "mandate", "readiness", "relevance"]);
 		expect(JSON.stringify(a)).not.toMatch(/"(score|probability|likelihood|confidence)"/);
-		expect(MATCH_POLICY_VERSION).toBe("match-policy/1");
+		expect(MATCH_POLICY_VERSION).toBe("match-policy/2");
 	});
 	it("a changed profile changes the result without touching the earlier one", () => {
 		const s = snap([fact({ field: "stage", value: "seed" }), fact({ field: "sector", value: "fintech" })]);
