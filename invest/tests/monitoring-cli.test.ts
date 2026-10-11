@@ -48,6 +48,12 @@ describe("monitor CLI", () => {
 		const cycle = JSON.parse(await readFile(join(dir, "cycle.json"), "utf8"));
 		expect(cycle.entries.map((e: { result: string }) => e.result)).toEqual(["ran", "ran"]);
 		expect((await monitor("run", "--workspace", "ws-dev", "--now", later)).out).toContain("0 due"); // idempotent
+		// An old schedule that nobody ran is reported, with a failing exit code, so cron or a supervisor can alert on it.
+		const years = new Date(Date.now() + 400 * 86_400_000).toISOString();
+		const stale = await monitor("status", "--workspace", "ws-dev", "--now", years);
+		expect(stale.out).toContain("ALERT");
+		expect(stale.out).toContain("Nothing is running the schedule");
+		expect(stale.code).toBe(1);
 		const paused = await monitor("pause", "ghost-capital.invalid", "--workspace", "ws-dev");
 		expect(paused.out).toContain("paused (profile and history kept)");
 		expect((await monitor("status", "--workspace", "ws-dev")).out).toContain("PAUSED");

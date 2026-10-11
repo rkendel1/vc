@@ -15,6 +15,10 @@ export type InvestConfig = {
 	appEnv: AppEnv;
 	logLevel: LogLevel;
 	port: number;
+	/** The interface the server listens on. Loopback unless set: a deployment opts in to being reachable. */
+	host: string;
+	/** Trust X-Forwarded-For for the client address (only behind a proxy you control). */
+	trustProxy: boolean;
 	feltdbDir: string;
 	authConfigPath: string | null;
 	jev: { endpoint: string | null; apiKey: string | null; provider: string | null; model: string | null; timeoutMs: number };
@@ -60,6 +64,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 	if (!["debug", "info", "warn", "error"].includes(logLevel)) throw new ConfigError("LOG_LEVEL must be debug, info, warn or error");
 
 	const dataDir = defaultDataDir(env);
+	const host = str(env, "INVEST_HOST") ?? "127.0.0.1";
+	const loopback = ["127.0.0.1", "::1", "localhost"].includes(host);
+	if (appEnv === "production") {
+		// A production process must say where its data lives; a default under the home directory is how data ends up somewhere nobody backs up.
+		if (!str(env, "FELTDB_DIR")) throw new ConfigError("FELTDB_DIR is required in production");
+		if (!str(env, "DOCUMENT_STORAGE_DIR")) throw new ConfigError("DOCUMENT_STORAGE_DIR is required in production");
+		if (str(env, "INVEST_DEV_TOKEN")) throw new ConfigError("INVEST_DEV_TOKEN must not be set in production");
+	}
 	if (str(env, "FELTDB_CONFIG_PATH")) warnings.push("FELTDB_CONFIG_PATH is not supported by the FeltDB 0.11.7 file runtime and is ignored; set FELTDB_DIR");
 
 	const jevEndpoint = str(env, "JEV_ENDPOINT");
@@ -75,7 +87,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 			throw new ConfigError("JEV_ENDPOINT must use https in production");
 	}
 	const jevKey = str(env, "JEV_API_KEY");
-	if (jevEndpoint && !jevKey) warnings.push("JEV_ENDPOINT is set without JEV_API_KEY; requests will be sent unauthenticated");
+	if (jevEndpoint && !jevKey) {
+		if (appEnv === "production") throw new ConfigError("JEV_API_KEY is required in production when JEV_ENDPOINT is set");
+		warnings.push("JEV_ENDPOINT is set without JEV_API_KEY; requests will be sent unauthenticated");
+	}
 	if (!jevEndpoint) warnings.push("Jev is not configured: semantic criteria will be recorded as evaluation_failed");
 
 	let linkSecret = str(env, "DOCUMENT_STORAGE_LINK_SECRET");
@@ -88,6 +103,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 
 	const authConfigPath = str(env, "AUTHBOUNDRY_CONFIG_PATH");
 	if (!authConfigPath && appEnv === "production") throw new ConfigError("AUTHBOUNDRY_CONFIG_PATH is required in production");
+	// The development identity (a published token) must never be reachable from another machine.
+	if (!authConfigPath && !loopback) throw new ConfigError(`INVEST_HOST=${host} would expose the development identity to the network; set AUTHBOUNDRY_CONFIG_PATH or listen on 127.0.0.1`);
 
 	const allowedTypes = (str(env, "DOCUMENT_ALLOWED_TYPES") ?? "application/pdf")
 		.split(",")
@@ -100,6 +117,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): { config: Inve
 		appEnv,
 		logLevel,
 		port: int(env, "INVEST_PORT", 3100, 1, 65535),
+		host,
+		trustProxy: bool(env, "INVEST_TRUST_PROXY", false),
 		feltdbDir: str(env, "FELTDB_DIR") ?? join(dataDir, "FeltDB"),
 		authConfigPath,
 		jev: {
@@ -158,6 +177,7 @@ export function describeConfig(config: InvestConfig): Record<string, unknown> {
 	return {
 		appEnv: config.appEnv,
 		port: config.port,
+		host: config.host,
 		feltdbDir: config.feltdbDir,
 		auth: config.authConfigPath ? "AuthBoundry adapter (principal registry)" : "development principal (no AUTHBOUNDRY_CONFIG_PATH)",
 		jev: config.jev.endpoint

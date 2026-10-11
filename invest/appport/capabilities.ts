@@ -910,10 +910,21 @@ export const claimReview = defineCapability({
 	version: 1,
 	description: "A moderator verifies, rejects or revokes a representative claim, with a rationale and the evidence considered. Verification needs a successful domain proof or documented evidence.",
 	authorization: ["moderation.review"],
-	input: s.object({ claimId: id(), decision: s.enum(["verify", "reject", "revoke"]), rationale: s.string(), evidence: s.optional(s.array(s.string(), { maxItems: 10 })) }),
+	input: s.object({ claimId: id(), decision: s.enum(["verify", "reject", "revoke"]), rationale: s.string(), evidence: s.optional(s.array(s.string(), { maxItems: 10 })), expectedStatus: s.optional(s.enum(["requested", "verified", "rejected", "revoked"])), keepPublished: s.optional(s.boolean()) }),
 	output: out("event"),
-	attributes: contract("append-only"),
-	handler: run(async (svc, actor, input: { claimId: string; decision: "verify" | "reject" | "revoke"; rationale: string; evidence?: string[] }) => ({ event: await svc.participation.reviewClaim(actor, input) })),
+	attributes: contract("atomic with its audit records; idempotent for a retry of the same decision; fenced against concurrent and stale decisions", "revoke withdraws what the representative published unless keepPublished is true"),
+	handler: run(async (svc, actor, input: { claimId: string; decision: "verify" | "reject" | "revoke"; rationale: string; evidence?: string[]; expectedStatus?: "requested" | "verified" | "rejected" | "revoked"; keepPublished?: boolean }) => ({ event: await svc.participation.reviewClaim(actor, input) })),
+});
+
+export const claimDirectory = defineCapability({
+	name: "claim.directory",
+	version: 1,
+	description: "Representative claims a moderator has decided (verified, rejected, revoked), across workspaces, with provenance, history, what they published, and who else holds authority for the firm. Challenges are not included.",
+	authorization: ["moderation.review"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.participation.claimDirectory(actor) })),
 });
 
 export const profileApprove = defineCapability({
@@ -1311,6 +1322,7 @@ export function investCapabilities(options: { maxUploadBytes: number }) {
 		profileClaimMine,
 		claimPending,
 		claimReview,
+		claimDirectory,
 		profileApprove,
 		profileApprovalWithdraw,
 		profilePublish,

@@ -3,7 +3,7 @@
  * against a real server (FeltDB, AppPort, AuthBoundry adapter) and the Jev HTTP adapter pointed at
  * the stand-in. Run with `bun run e2e:browser` after `bun run build:web`.
  */
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,12 @@ const executablePath = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium-1
 function check(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(`E2E assertion failed: ${message}`);
 	console.log(`  ok  ${message}`);
+}
+
+// Nothing server-only may be in what the browser downloads.
+for (const f of (await readdir(join(root, "apps/invest-web/dist"), { recursive: true })).filter((n) => /\.(js|css|html)$/.test(n))) {
+	const text = await readFile(join(root, "apps/invest-web/dist", f), "utf8");
+	for (const needle of ["JEV_API_KEY", "DOCUMENT_STORAGE_LINK_SECRET", "AUTHBOUNDRY_CONFIG_PATH", "tokenSha256", "dev-partner-token", "e2e-key", ...Object.values(TOKENS)]) check(!text.includes(needle), `bundle ${f} does not contain ${needle}`);
 }
 
 const jev = startJevStandin({ port: 0, apiKey: "e2e-key" });

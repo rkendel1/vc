@@ -130,6 +130,8 @@ export class SourceIngestionModule {
 		} catch {
 			throw invalid("canonicalUrl must be a public http(s) URL without credentials");
 		}
+		// The system never sends credentials, so a secret in the URL could only be stored, shown and logged. Refuse it.
+		if ([...url.searchParams.keys()].some((k) => /(token|key|secret|passw|pwd|sig|signature|auth|credential|session)/i.test(k))) throw invalid("The URL carries what looks like a credential in its query string. Sources are read anonymously: use a URL without it.");
 		url.hash = "";
 		const host = url.hostname.toLowerCase().replace(/^www\./, "");
 		const extras: string[] = [];

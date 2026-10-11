@@ -24,6 +24,12 @@
 		"quality": "bun invest/quality/run.ts",
 		"e2e:browser": "bun run build:web && bun invest/e2e/browser.e2e.ts",
 		"ci": "bun run typecheck && bun run check:architecture && bun run test && bun run quality",
+		"token": "bun invest/scripts/token.ts",
+		"preflight": "bun invest/scripts/preflight.ts",
+		"backup": "bun invest/scripts/backup.ts",
+		"restore": "bun invest/scripts/restore.ts",
+		"verify-data": "bun invest/scripts/verify-data.ts",
+		"smoke:live": "bun invest/scripts/smoke-live.ts",
 		"biome": "bunx --bun @biomejs/biome"
 	},
 	"engines": {

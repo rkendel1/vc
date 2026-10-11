@@ -23,9 +23,18 @@ async function main() {
 	for (const w of warnings) logger.warn(w);
 	const runtime = await bootstrap(config, logger);
 	const server = createInvestHttpServer(runtime, { webDist, logger });
-	server.listen(config.port, () => logger.info("Attn Invest listening", { url: `http://localhost:${config.port}`, appport: `http://localhost:${config.port}/appport` }));
+	server.listen(config.port, config.host, () => logger.info("Attn Invest listening", { url: `http://${config.host}:${config.port}`, appport: `http://${config.host}:${config.port}/appport`, auth: config.authConfigPath ? "identity registry" : "development identity (loopback only)" }));
+	let stopping = false;
 	const shutdown = async () => {
-		logger.info("Shutting down");
+		if (stopping) return;
+		stopping = true;
+		logger.info("Shutting down: finishing work in flight");
+		// A hung check must not keep the process (and the database lock) forever; whatever was in flight is recovered at the next start.
+		const forced = setTimeout(() => {
+			logger.error("Shutdown did not finish in 30 s; exiting. Interrupted work is recovered on the next start");
+			process.exit(1);
+		}, 30_000);
+		forced.unref();
 		server.close();
 		await runtime.close();
 		process.exit(0);

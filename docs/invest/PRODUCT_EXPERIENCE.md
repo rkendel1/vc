@@ -148,12 +148,12 @@ Local only; no GitHub Actions run. Browser journeys in `invest/e2e/browser.e2e.t
 
 * **No live validation:** fixtures only; no live investor source, Jev deployment or real investor behaviour. Remote CI not run.
 * **Accessibility is checked by script and by hand-written assertions**, not with assistive technology or an automated engine such as axe; colour contrast was not measured.
-* **Moderators cannot list or revoke already-verified representatives in the UI** (no list capability exists); revoke is available only through the capability.
-* A moderator's claim decision is recorded in two separate transactions (claimant workspace, then the moderator's own history); a crash between them leaves the second missing.
+* *(Fixed in VC-7)* Moderators now list decided representatives and revoke or re-verify them in Review → "Representatives you have decided", with the effects stated.
+* *(Fixed in VC-7)* A moderator's decision and both audit records are now one FeltDB transaction.
 * **Fund screens (Theses, Startups, report)** received navigation and vocabulary changes only; they were not redesigned. The firm research page is still long.
 * Adding firms for fund research still needs the command line (`bun run research`); only representatives add their firm through the UI.
-* Authentication is a local token registry: no sign-up, rotation, expiry, SSO or audit of token issue.
-* Single-process FeltDB file runtime; no horizontal scaling, backups or migrations are provided.
-* Monitoring needs an external scheduler (cron) invoking `bun run monitor`.
+* Authentication is a local token registry: no sign-up, SSO or audit of token issue. VC-7 added expiry, disabling, hot reload and a token generator; see `PRODUCTION_READINESS.md`.
+* Single-process FeltDB file runtime; no horizontal scaling or migrations. Backup, restore and verification commands exist (VC-7).
+* Monitoring runs in the server only with `MONITORING_ENABLED=1`; otherwise it needs `bun run monitor -- run --daemon` or cron. VC-7 reports when nothing is running it (`monitor status`, Operations → Monitoring).
 * The investor list a founder sees is limited to published profiles and the workspace's own research. There is no global investor search.
 * Heuristics: staleness windows (180 days) and evidence disagreement (10%) are conventions, not calibrated.

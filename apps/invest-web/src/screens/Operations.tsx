@@ -1,4 +1,4 @@
-import type { AttentionItem } from "../../../../invest/domain/research.ts";
+import { type AttentionItem, monitoringHealth } from "../../../../invest/domain/research.ts";
 import { call } from "../api.ts";
 import { Badge, EmptyState, ErrorNote, Loading, PageHead, Section, href, useCan, useLoad, useSession, when } from "../ui.tsx";
 import { type Principal } from "../ui.tsx";
@@ -41,9 +41,15 @@ export function OperationsScreen({ tab }: { tab?: string }) {
 function MonitoringPanel() {
 	const attention = useLoad(() => call<{ items: AttentionItem[] }>("attention.list", {}).then((r) => r.items), []);
 	const firms = useLoad(() => call<{ items: Any[] }>("firm.list", {}).then((r) => r.items), []);
+	const health = firms.data ? monitoringHealth(firms.data.filter((f) => f.monitoring).map((f) => f.monitoring), new Date()) : null;
 	return (
 		<>
 			<p className="muted small">Firms are re-read on a schedule. A failing or stale firm shows here first. Findings never change anything a firm has approved.</p>
+			{health?.schedulerLikelyMissing ? (
+				<p className="notice error" role="alert">
+					{health.overdue} monitored {health.overdue === 1 ? "firm is" : "firms are"} overdue (the longest by {health.oldestOverdueMinutes} minutes). Nothing appears to be running the schedule; ask whoever operates the server to start the monitoring job.
+				</p>
+			) : null}
 			<AttentionPanel items={attention.data ?? []} />
 			{firms.loading && !firms.data ? <Loading what="monitoring" /> : <ErrorNote error={firms.error} />}
 			{firms.data?.length ? (

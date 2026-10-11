@@ -55,6 +55,15 @@ export type AuditListV1Output = {
 export type AuditListInput = AuditListV1Input;
 export type AuditListOutput = AuditListV1Output;
 
+/** Representative claims a moderator has decided (verified, rejected, revoked), across workspaces, with provenance, history, what they published, and who else holds authority for the firm. Challenges are not included. */
+export type ClaimDirectoryV1Input = Record<string, never>;
+export type ClaimDirectoryV1Output = {
+  items: unknown;
+};
+
+export type ClaimDirectoryInput = ClaimDirectoryV1Input;
+export type ClaimDirectoryOutput = ClaimDirectoryV1Output;
+
 /** Representative claims awaiting a moderator decision, across workspaces. Challenges are not included. */
 export type ClaimPendingV1Input = Record<string, never>;
 export type ClaimPendingV1Output = {
@@ -70,6 +79,8 @@ export type ClaimReviewV1Input = {
   decision: "verify" | "reject" | "revoke";
   rationale: string;
   evidence?: Array<string>;
+  expectedStatus?: "requested" | "verified" | "rejected" | "revoked";
+  keepPublished?: boolean;
 };
 export type ClaimReviewV1Output = {
   event: unknown;
@@ -1234,6 +1245,7 @@ export interface InvestContract extends AppContract {
     "appport.ping": { input: AppportPingInput; output: AppportPingOutput; kind: "request"; version: 1 };
     "attention.list": { input: AttentionListInput; output: AttentionListOutput; kind: "request"; version: 1 };
     "audit.list": { input: AuditListInput; output: AuditListOutput; kind: "request"; version: 1 };
+    "claim.directory": { input: ClaimDirectoryInput; output: ClaimDirectoryOutput; kind: "request"; version: 1 };
     "claim.pending": { input: ClaimPendingInput; output: ClaimPendingOutput; kind: "request"; version: 1 };
     "claim.review": { input: ClaimReviewInput; output: ClaimReviewOutput; kind: "request"; version: 1 };
     "contribution.create": { input: ContributionCreateInput; output: ContributionCreateOutput; kind: "request"; version: 1 };
@@ -1328,6 +1340,7 @@ export const capabilityVersions: Record<string, number> = {
   "appport.ping": 1,
   "attention.list": 1,
   "audit.list": 1,
+  "claim.directory": 1,
   "claim.pending": 1,
   "claim.review": 1,
   "contribution.create": 1,
@@ -1783,6 +1796,66 @@ export const manifest = {
       ]
     },
     {
+      "name": "claim.directory",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Representative claims a moderator has decided (verified, rejected, revoked), across workspaces, with provenance, history, what they published, and who else holds authority for the firm. Challenges are not included.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "moderation.review"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Representative claims a moderator has decided (verified, rejected, revoked), across workspaces, with provenance, history, what they published, and who else holds authority for the firm. Challenges are not included.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "moderation.review"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
       "name": "claim.pending",
       "versions": [
         1
@@ -1873,6 +1946,18 @@ export const manifest = {
               "type": "string"
             },
             "maxItems": 10
+          },
+          "expectedStatus": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "verified",
+              "rejected",
+              "revoked"
+            ]
+          },
+          "keepPublished": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -1927,6 +2012,18 @@ export const manifest = {
                   "type": "string"
                 },
                 "maxItems": 10
+              },
+              "expectedStatus": {
+                "type": "string",
+                "enum": [
+                  "requested",
+                  "verified",
+                  "rejected",
+                  "revoked"
+                ]
+              },
+              "keepPublished": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false,

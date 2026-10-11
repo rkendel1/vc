@@ -10,6 +10,7 @@ import { DocumentStorage } from "./ingestion/document-storage.ts";
 import { JevHttpClient, UnconfiguredJev, type JevDecider } from "./jev/jev-client.ts";
 import { SafeHttpFetcher } from "./research/fetcher.ts";
 import type { Logger } from "./logger.ts";
+import { assertPrivate } from "./security/permissions.ts";
 import { InvestmentService } from "./service.ts";
 import { InvestStore } from "./store/store.ts";
 
@@ -72,14 +73,16 @@ export async function bootstrap(config: InvestConfig, logger: Logger, overrides:
 		monitoring: monitoringOptions(config),
 		ingestion: { fetcherForSource: overrides.fetcherForSource ?? defaultSourceFetcherFactory(config), defaults: researchLimits(config), maxBytes: config.sources.maxBytes, maxRecords: config.sources.maxRecords, lookbackDays: config.research.announcementLookbackDays },
 	});
+	const production = config.appEnv === "production";
+	await assertPrivate([...(config.authConfigPath ? [{ path: config.authConfigPath, what: "The identity registry" }] : []), { path: config.feltdbDir, what: "The FeltDB data directory" }, { path: config.documents.storageDir, what: "The document storage directory" }], { production, warn: (m) => logger.warn(m) });
 	let registry;
-	if (config.authConfigPath) registry = await loadRegistry(config.authConfigPath);
+	if (config.authConfigPath) registry = await loadRegistry(config.authConfigPath, { production });
 	else {
 		if (config.appEnv === "production") throw new Error("AUTHBOUNDRY_CONFIG_PATH is required in production");
 		registry = developmentRegistry(process.env.INVEST_DEV_TOKEN || undefined);
 		logger.warn("Using the development principal registry (workspace ws-dev, role partner); set AUTHBOUNDRY_CONFIG_PATH for real identities", {});
 	}
-	const authority = new RegistryAuthority(registry);
+	const authority = new RegistryAuthority(registry, { path: config.authConfigPath ?? undefined, production });
 	const recovered = await service.evaluations.recoverInterrupted(authority.workspaceIds);
 	if (recovered) logger.warn("Marked evaluations interrupted by the last shutdown as failed", { recovered });
 	const sourceRuns = await service.sources.recoverInterrupted(authority.workspaceIds);

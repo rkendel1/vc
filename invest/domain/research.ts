@@ -321,6 +321,44 @@ export type MonitoringTarget = {
 
 export type MonitoringSummary = Pick<MonitoringTarget, "enabled" | "intervalMinutes" | "nextCheckAt" | "lastAttemptAt" | "lastSuccessAt" | "consecutiveFailures"> & { running: boolean };
 
+/** A check is "overdue" once it is this much later than it was scheduled (never less than 10 minutes, so a normal tick and run never trip it). */
+export const overdueGraceMs = (intervalMinutes: number): number => Math.max(10 * 60_000, Math.round(intervalMinutes * 60_000 * 0.25));
+export const FAILING_AFTER = 3;
+
+export type MonitoringHealth = {
+	enabled: number;
+	overdue: number;
+	failing: number;
+	oldestOverdueMinutes: number | null;
+	/**
+	 * True when at least one enabled target is well past its scheduled time and nothing is checking it. Every check, successful or
+	 * not, reschedules its target (failures back off), so an overdue target means nobody ran it: no scheduler, or a stalled one. It cannot
+	 * distinguish "never started" from "stopped", and says nothing when there are no targets.
+	 */
+	schedulerLikelyMissing: boolean;
+};
+
+/** Pure: the alert-worthy facts about monitoring, from the schedule alone. */
+export function monitoringHealth(targets: Pick<MonitoringSummary, "enabled" | "intervalMinutes" | "nextCheckAt" | "consecutiveFailures" | "running">[], now: Date): MonitoringHealth {
+	let enabled = 0;
+	let overdue = 0;
+	let failing = 0;
+	let oldest: number | null = null;
+	for (const t of targets) {
+		if (!t.enabled) continue;
+		enabled++;
+		if (t.consecutiveFailures >= FAILING_AFTER) failing++;
+		const due = t.nextCheckAt ? Date.parse(t.nextCheckAt) : Number.NaN;
+		if (t.running || !Number.isFinite(due)) continue;
+		const late = now.getTime() - due;
+		if (late > overdueGraceMs(t.intervalMinutes)) {
+			overdue++;
+			oldest = Math.max(oldest ?? 0, Math.round(late / 60_000));
+		}
+	}
+	return { enabled, overdue, failing, oldestOverdueMinutes: oldest, schedulerLikelyMissing: overdue > 0 };
+}
+
 /** Current state of one source URL: what was last read successfully, independent of later failures. */
 export type SourceState = {
 	id: string;

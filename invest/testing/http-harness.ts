@@ -8,7 +8,8 @@ import { loadConfig } from "../config.ts";
 import { sha256Hex } from "../domain/canonical.ts";
 import { createInvestHttpServer } from "../http.ts";
 import type { JevDecider } from "../jev/jev-client.ts";
-import { silentLogger } from "../logger.ts";
+import { type Logger, silentLogger } from "../logger.ts";
+import type { FailureLimiter } from "../security/rate-limit.ts";
 
 export const TOKENS = {
 	aPartner: "token-a-partner-0001",
@@ -23,12 +24,14 @@ export const TOKENS = {
 
 export type HttpHarness = {
 	url: string;
+	dir: string;
+	registryPath: string;
 	runtime: InvestRuntime;
 	client(token?: string): ReturnType<typeof createClient>;
 	close(): Promise<void>;
 };
 
-export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: number; webDist?: string; fetcherFor?: ResearchFetcherFactory; fetcherForSource?: SourceFetcherFactory } = {}): Promise<HttpHarness> {
+export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: number; webDist?: string; fetcherFor?: ResearchFetcherFactory; fetcherForSource?: SourceFetcherFactory; limiter?: FailureLimiter; logger?: Logger; production?: boolean } = {}): Promise<HttpHarness> {
 	const dir = await mkdtemp(join(tmpdir(), "invest-http-"));
 	const registryPath = join(dir, "auth.json");
 	await writeFile(
@@ -66,11 +69,13 @@ export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: n
 		JEV_TIMEOUT_MS: "5000",
 	});
 	const runtime = await bootstrap(config, silentLogger, { jev: options.jev, fetcherFor: options.fetcherFor, fetcherForSource: options.fetcherForSource });
-	const server = createInvestHttpServer(runtime, { webDist: options.webDist ?? join(dir, "no-web"), logger: silentLogger });
+	const server = createInvestHttpServer(runtime, { webDist: options.webDist ?? join(dir, "no-web"), logger: options.logger ?? silentLogger, limiter: options.limiter });
 	await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 	const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 	return {
 		url,
+		dir,
+		registryPath,
 		runtime,
 		client(token?: string) {
 			return createClient({ transport: createHttpTransport({ url: `${url}/appport`, headers: token ? { authorization: `Bearer ${token}` } : {} }) });

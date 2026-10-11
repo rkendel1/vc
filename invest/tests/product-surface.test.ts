@@ -228,9 +228,9 @@ describe("a representative's claim also adds the firm, once", () => {
 		sites["meridian.vc"]![WK] = { type: "text/plain", body: req.claim.challenge };
 		await call(TOKENS.rRep, "profile.claim.check", { claimId: req.claim.id });
 		await call(TOKENS.mModerator, "claim.review", { claimId: req.claim.id, decision: "verify", rationale: "Domain proof succeeded; partner listed on the team page." });
-		const mine = (await call<{ items: AuditEvent[] }>(TOKENS.mModerator, "audit.list", {})).items.filter((e) => e.eventType === "moderation.claim_decided");
+		const mine = (await call<{ items: AuditEvent[] }>(TOKENS.mModerator, "audit.list", {})).items.filter((e) => e.eventType === "claim.verified");
 		expect(mine).toHaveLength(1);
-		expect(mine[0]).toMatchObject({ actorId: "mona", payload: { decision: "verified", domain: "meridian.vc" } });
+		expect(mine[0]).toMatchObject({ actorId: "mona", payload: { previousStatus: "requested", domain: "meridian.vc" } });
 		const theirs = (await call<{ items: AuditEvent[] }>(TOKENS.rRep, "audit.list", {})).items.filter((e) => e.eventType === "claim.verified");
 		expect(theirs[0]).toMatchObject({ actorId: "mona" });
 		// a founder cannot read either trail

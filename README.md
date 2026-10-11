@@ -59,6 +59,10 @@ Everything is exercised against fixtures and the local stack: unit and integrati
 | Refresh monitored firms on demand; run on a schedule in production | `bun run monitor -- run --workspace <id>` |
 | Register or run a curated source | `bun run sources -- …` (or Operations → Research sources) |
 | Seed a demo workspace | `bun run seed` |
+| Issue an access token and registry entry | `bun run token -- --principal <id> --workspace <id> --role <role>` |
+| Check a deployment before starting it | `bun run preflight` |
+| Back up, restore (to a new empty directory), verify | `bun run backup -- --out <dir>`, `bun run restore -- --from <backup> --to <dir>`, `bun run verify-data` |
+| Opt-in live fetch check (never run by tests) | `INVEST_LIVE_SMOKE=1 bun run smoke:live -- https://…` |
 
 Configuration is in [`invest/.env.example`](invest/.env.example). Durable state is declared in [`feltdb.flow`](feltdb.flow).
 
@@ -66,6 +70,7 @@ Configuration is in [`invest/.env.example`](invest/.env.example). Durable state 
 
 | Document | Contents |
 | --- | --- |
+| [`docs/invest/PRODUCTION_READINESS.md`](docs/invest/PRODUCTION_READINESS.md) | **Read before deploying.** Status per area, risk register, deployment pattern, backup/restore, monitoring operations, what is not verified, and the conditions for a limited pilot |
 | [`docs/invest/PRODUCT_EXPERIENCE.md`](docs/invest/PRODUCT_EXPERIENCE.md) | The customer experience for founders, representatives and moderators; navigation; vocabulary; what was fixed in VC-6; operational gaps |
 | [`docs/invest/VC5_FOUNDER_MATCHING.md`](docs/invest/VC5_FOUNDER_MATCHING.md) | Matching rules, evidence and versioning model, privacy |
 | [`docs/invest/VC4_COLLABORATION.md`](docs/invest/VC4_COLLABORATION.md) | Sources, entity resolution, reconciliation, representative workflow, contributions |
@@ -76,7 +81,7 @@ Configuration is in [`invest/.env.example`](invest/.env.example). Durable state 
 
 | Command | What it proves |
 | --- | --- |
-| `bun run test` | 292 tests (47 original, 55 VC-2 research, 51 VC-3 monitoring, 53 VC-4 collaboration, 65 VC-5 founder matching, 21 VC-6 product surface):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
+| `bun run test` | The full suite (original, VC-2 research, VC-3 monitoring, VC-4 collaboration, VC-5 founder matching, VC-6 product surface, VC-7 integrity, SSRF, security, data safety, audit):  thesis versioning and races, ingestion (good, malformed, truncated, text-less, partial, adversarial PDFs), evaluation (positive, negative, ambiguous, adversarial, missing, Jev failures, deadlines, idempotency, reruns, tamper detection, crash recovery, credential leakage), decisions, telemetry off, and the AppPort boundary over real HTTP including cross-workspace isolation |
 | `bun run typecheck` | Server and web app typecheck |
 | `bun run check:architecture` | The invariants in `docs/invest/PR1_ARCHITECTURE_BASELINE.md` §5 |
 | `bun run generate:check`, `doctor` | Generated manifest/client are current; AppPort doctor is clean |
