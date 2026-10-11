@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { RESEARCH_STATUSES, type CriterionView, type FirmListItem, type FirmProfile, type ResearchSource, type ResearchStatus } from "../../../../invest/domain/research.ts";
+import { RESEARCH_STATUSES, type AttentionItem, type CriterionView, type FirmListItem, type FirmProfile, type MonitoringTarget, type ResearchSource, type ResearchStatus, type TimelineItem } from "../../../../invest/domain/research.ts";
 import { call } from "../api.ts";
 import { ErrorNote, Loading, PageHead, Section, href, useAction, useCan, useLoad, when } from "../ui.tsx";
 
@@ -67,9 +67,11 @@ export function InvestorsScreen() {
 	const [query, setQuery] = useState("");
 	const [status, setStatus] = useState<ResearchStatus | "">("");
 	const { data, error, loading } = useLoad(() => call<{ items: FirmListItem[] }>("firm.list", { ...(query.trim() ? { query: query.trim() } : {}), ...(status ? { status } : {}) }).then((r) => r.items), [query, status]);
+	const attention = useLoad(() => call<{ items: AttentionItem[] }>("attention.list", {}).then((r) => r.items), []);
 	return (
 		<>
 			<PageHead title="Investors" sub="Public-source research on venture firms. Findings here are not investor-approved theses." />
+			<AttentionPanel items={attention.data ?? []} />
 			<div className="row" style={{ marginBottom: 12 }}>
 				<label className="field">
 					Search
@@ -96,7 +98,8 @@ export function InvestorsScreen() {
 								<th>Firm</th>
 								<th>Research</th>
 								<th>Criteria</th>
-								<th>Last researched</th>
+								<th>Last successful research</th>
+								<th>Monitoring</th>
 								<th>Flags</th>
 							</tr>
 						</thead>
@@ -112,7 +115,21 @@ export function InvestorsScreen() {
 										{f.stub ? <div className="muted small">Stub profile</div> : null}
 									</td>
 									<td>{f.criteriaCount ? `${f.criteriaCount} (${f.explicitCount} stated)` : "—"}</td>
-									<td className="nowrap">{when(f.lastResearchedAt)}</td>
+									<td className="nowrap">
+										{when(f.lastSuccessAt)}
+										{f.lastResearchedAt && f.lastResearchedAt !== f.lastSuccessAt ? <div className="muted small">Last attempt {when(f.lastResearchedAt)}</div> : null}
+									</td>
+									<td>
+										{f.monitoring ? (
+											<>
+												<span className={`flag ${f.monitoring.enabled ? "" : "stale"}`}>{f.monitoring.enabled ? (f.monitoring.running ? "Checking now" : "Monitored") : "Paused"}</span>
+												{f.monitoring.consecutiveFailures ? <span className="flag conflict">{f.monitoring.consecutiveFailures} failed</span> : null}
+												{f.monitoring.enabled ? <div className="muted small">Next {when(f.monitoring.nextCheckAt)}</div> : null}
+											</>
+										) : (
+											<span className="muted small">Not monitored</span>
+										)}
+									</td>
 									<td>
 										{f.stale ? <span className="flag stale">Stale</span> : null} {f.conflictCount ? <span className="flag conflict">{f.conflictCount} conflict{f.conflictCount === 1 ? "" : "s"}</span> : null}
 										{f.researchStatus === "research_incomplete" ? <span className="flag">{f.retryable ? "Retry may help" : "Blocked"}</span> : null}
@@ -318,8 +335,10 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 				title={p.firm.name}
 				sub={
 					<>
-						<UrlText url={p.firm.website} /> · <StatusBadge status={p.firm.researchStatus} /> · last researched {when(p.firm.lastResearchedAt)}
+						<UrlText url={p.firm.website} /> · <StatusBadge status={p.firm.researchStatus} /> · last successful research {when(p.firm.lastSuccessAt)}
+						{p.firm.lastResearchedAt && p.firm.lastResearchedAt !== p.firm.lastSuccessAt ? <span className="muted"> (latest attempt {when(p.firm.lastResearchedAt)})</span> : null}
 						{p.stale ? <span className="flag stale"> Stale (older than {p.staleAfterDays} days)</span> : null}
+						{p.health.failing ? <span className="flag conflict"> Research failing</span> : null}
 					</>
 				}
 				actions={
@@ -416,6 +435,9 @@ export function InvestorScreen({ firmId }: { firmId: string }) {
 			)}
 			{!p.criteria.length && !p.stub ? <p className="empty">No criteria in the latest run.</p> : null}
 
+			<MonitoringSection p={p} canRun={canRun} reload={reload} />
+			<TimelineSection firmId={firmId} canReview={canReview} version={p.runs.length + p.findings.length + p.events.length + p.reviews.length} reload={reload} />
+
 			<Section title={`Sources checked (${p.runs[0]?.checks.length ?? 0} in the latest run)`}>
 				{p.sources.length ? (
 					<div className="table-wrap">
@@ -497,5 +519,249 @@ function WithdrawButton({ firmId, approvalId, reload }: { firmId: string; approv
 			</button>
 			<ErrorNote error={a.error} />
 		</>
+	);
+}
+
+const ATTENTION_TITLE: Record<AttentionItem["kind"], string> = {
+	new_investment: "New investment activity",
+	strategy_change: "Potential strategy changes",
+	needs_review: "Findings requiring review",
+	research_failing: "Research failing",
+	research_stale: "Research stale",
+};
+
+/** Four different things, never blended: activity, strategy, review queue, and research health. */
+function AttentionPanel({ items }: { items: AttentionItem[] }) {
+	if (!items.length) return null;
+	const kinds = Object.keys(ATTENTION_TITLE) as AttentionItem["kind"][];
+	return (
+		<section className="attention" aria-label="Needs attention" data-testid="attention">
+			<div className="grid-2">
+				{kinds.map((k) => {
+					const rows = items.filter((i) => i.kind === k);
+					if (!rows.length) return null;
+					return (
+						<div key={k} className={`attn attn-${k}`}>
+							<h3>
+								{ATTENTION_TITLE[k]} ({rows.length})
+							</h3>
+							<ul className="timeline">
+								{rows.slice(0, 6).map((r) => (
+									<li key={r.refId}>
+										<a href={href("investors", r.firmId)}>{r.firmName}</a>: {r.title} <span className="muted small">found {when(r.at)}</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					);
+				})}
+			</div>
+		</section>
+	);
+}
+
+const INTERVALS = [
+	{ label: "Every 6 hours", minutes: 360 },
+	{ label: "Daily", minutes: 1440 },
+	{ label: "Every 3 days", minutes: 4320 },
+	{ label: "Weekly", minutes: 10080 },
+];
+
+function MonitoringSection({ p, canRun, reload }: { p: FirmProfile; canRun: boolean; reload: () => void }) {
+	const t: MonitoringTarget | null = p.monitoring;
+	const a = useAction();
+	if (!t) return <Section title="Monitoring"><p className="empty">This firm is not monitored. Register it with the research command to schedule recurring checks.</p></Section>;
+	const set = (change: { enabled?: boolean; intervalMinutes?: number }) => a.run(() => call("firm.monitoring.set", { firmId: p.firm.id, ...change })).then((r) => r && reload());
+	const checking = !!t.lease && Date.parse(t.lease.expiresAt) > Date.now();
+	return (
+		<Section title="Monitoring" actions={canRun ? <button className="quiet" disabled={a.busy} onClick={() => set({ enabled: !t.enabled })}>{t.enabled ? "Pause monitoring" : "Resume monitoring"}</button> : null}>
+			<dl className="facts" data-testid="monitoring">
+				<dt>State</dt>
+				<dd>{t.enabled ? (checking ? "Checking now" : "Monitored") : `Paused ${when(t.pausedAt)}${t.pausedBy ? ` by ${t.pausedBy}` : ""}. The profile and history are kept.`}</dd>
+				<dt>Schedule</dt>
+				<dd>
+					Every {t.intervalMinutes >= 1440 ? `${t.intervalMinutes / 1440} day(s)` : `${t.intervalMinutes / 60} hour(s)`}; next check {t.enabled ? when(t.nextCheckAt) : "—"}
+					{canRun ? (
+						<select aria-label="Check interval" value={INTERVALS.some((i) => i.minutes === t.intervalMinutes) ? t.intervalMinutes : ""} onChange={(e) => e.target.value && set({ intervalMinutes: Number(e.target.value) })} style={{ marginLeft: 8 }}>
+							<option value="">Custom</option>
+							{INTERVALS.map((i) => (
+								<option key={i.minutes} value={i.minutes}>
+									{i.label}
+								</option>
+							))}
+						</select>
+					) : null}
+				</dd>
+				<dt>Last attempt</dt>
+				<dd>{when(t.lastAttemptAt)}</dd>
+				<dt>Last successful check</dt>
+				<dd>{when(t.lastSuccessAt)}</dd>
+				<dt>Research health</dt>
+				<dd>
+					{p.health.failing ? "Failing" : p.health.stale ? "Stale" : "Healthy"}
+					{t.consecutiveFailures ? `; ${t.consecutiveFailures} failed check(s) in a row` : ""}
+					{t.lastError ? `. Last error: ${t.lastError.message}` : ""}
+					{p.health.inaccessibleSources || p.health.missingSources ? `. ${p.health.inaccessibleSources} source(s) inaccessible, ${p.health.missingSources} missing; their last successful snapshots are kept.` : ""}
+				</dd>
+			</dl>
+			<ErrorNote error={a.error} />
+		</Section>
+	);
+}
+
+const TYPE_FILTERS: { value: string; label: string }[] = [
+	{ value: "", label: "All types" },
+	{ value: "investment_event", label: "Investment announcements" },
+	{ value: "portfolio_addition", label: "Portfolio additions" },
+	{ value: "thesis_finding", label: "Proposed thesis changes" },
+	{ value: "conflict", label: "Conflicting evidence" },
+	{ value: "source_discovered", label: "New sources" },
+	{ value: "source_changed", label: "Material page changes" },
+	{ value: "source_missing", label: "Missing sources" },
+	{ value: "research_failed", label: "Failed research" },
+	{ value: "review", label: "Reviewer decisions" },
+];
+const RANGES: { value: string; label: string; days: number | null }[] = [
+	{ value: "all", label: "All time", days: null },
+	{ value: "7", label: "Last 7 days", days: 7 },
+	{ value: "30", label: "Last 30 days", days: 30 },
+	{ value: "365", label: "Last year", days: 365 },
+];
+const REVIEW_FILTERS = [
+	{ value: "", label: "Any review state" },
+	{ value: "needs_review", label: "Needs review" },
+	{ value: "unreviewed", label: "Unreviewed" },
+	{ value: "confirmed", label: "Confirmed" },
+	{ value: "dismissed", label: "Dismissed" },
+	{ value: "disputed", label: "Disputed" },
+];
+
+function TimelineSection({ firmId, canReview, version, reload }: { firmId: string; canReview: boolean; version: number; reload: () => void }) {
+	const [type, setType] = useState("");
+	const [range, setRange] = useState("all");
+	const [review, setReview] = useState("");
+	const days = RANGES.find((r) => r.value === range)?.days ?? null;
+	const { data, error, loading, reload: reloadTimeline } = useLoad(
+		() =>
+			call<{ items: TimelineItem[] }>("firm.timeline", {
+				firmId,
+				...(type ? { types: [type] } : {}),
+				...(review ? { reviewStates: [review] } : {}),
+				...(days ? { from: new Date(Date.now() - days * 86_400_000).toISOString() } : {}),
+			}).then((r) => r.items),
+		[firmId, type, range, review, version],
+	);
+	return (
+		<Section title="Intelligence timeline">
+			<p className="muted small">What the source says happened (published, announced), when this system found it (discovered) and when a person decided (reviewed) are shown separately. Failed research is health information, not investor activity.</p>
+			<div className="row" style={{ marginBottom: 8 }}>
+				<label className="field">
+					Type
+					<select value={type} onChange={(e) => setType(e.target.value)}>
+						{TYPE_FILTERS.map((t) => (
+							<option key={t.value} value={t.value}>
+								{t.label}
+							</option>
+						))}
+					</select>
+				</label>
+				<label className="field">
+					Found
+					<select value={range} onChange={(e) => setRange(e.target.value)}>
+						{RANGES.map((t) => (
+							<option key={t.value} value={t.value}>
+								{t.label}
+							</option>
+						))}
+					</select>
+				</label>
+				<label className="field">
+					Review
+					<select value={review} onChange={(e) => setReview(e.target.value)}>
+						{REVIEW_FILTERS.map((t) => (
+							<option key={t.value} value={t.value}>
+								{t.label}
+							</option>
+						))}
+					</select>
+				</label>
+			</div>
+			{loading && !data ? <Loading what="timeline" /> : <ErrorNote error={error} />}
+			{data?.length ? (
+				<div className="stack" data-testid="timeline">
+					{data.map((i) => (
+						<TimelineRow key={i.id} item={i} firmId={firmId} canReview={canReview} onChange={() => { reloadTimeline(); reload(); }} />
+					))}
+				</div>
+			) : data ? (
+				<p className="empty">Nothing matches.</p>
+			) : null}
+		</Section>
+	);
+}
+
+const CATEGORY_LABEL: Record<TimelineItem["category"], string> = { investment_activity: "Investment activity", strategy: "Strategy", source: "Source", health: "Research health", review: "Review" };
+
+function TimelineRow({ item, firmId, canReview, onChange }: { item: TimelineItem; firmId: string; canReview: boolean; onChange: () => void }) {
+	const [note, setNote] = useState("");
+	const a = useAction();
+	const subject = item.refs.eventId ? { eventId: item.refs.eventId } : item.refs.findingId && item.type !== "review" ? { findingId: item.refs.findingId } : null;
+	const decide = async (action: "confirm" | "dismiss" | "dispute" | "flag") => {
+		if (!subject || !note.trim()) return;
+		if (await a.run(() => call("firm.review", { firmId, ...subject, action, note }))) {
+			setNote("");
+			onChange();
+		}
+	};
+	return (
+		<details className={`criterion tl tl-${item.category}`} data-type={item.type}>
+			<summary>
+				<span className="rc-label">{item.title}</span>
+				<span className="tag">{CATEGORY_LABEL[item.category]}</span>
+				{item.baseline ? <span className="tag" title="Found by the first successful research run: context, not news">Baseline</span> : null}
+				{item.reviewState !== "not_applicable" ? <span className={`tag review-${item.reviewState}`}>{item.reviewState.replace(/_/g, " ")}</span> : null}
+			</summary>
+			<div className="stack">
+				<p>{item.detail}</p>
+				<dl className="facts">
+					<dt>Published</dt>
+					<dd>{item.publishedAt ? when(item.publishedAt) : "not stated by the source"}</dd>
+					{item.announcedAt ? (
+						<>
+							<dt>Announced</dt>
+							<dd>{when(item.announcedAt)}</dd>
+						</>
+					) : null}
+					<dt>Discovered</dt>
+					<dd>{when(item.discoveredAt)}</dd>
+					<dt>Reviewed</dt>
+					<dd>{item.reviewedAt ? when(item.reviewedAt) : "not reviewed"}</dd>
+				</dl>
+				{item.evidence.map((e) => (
+					<div key={`${e.url}${e.passage}`}>
+						{e.passage ? <blockquote className="passage">{e.passage}</blockquote> : null}
+						<div className="small">
+							<UrlText url={e.url} />
+						</div>
+					</div>
+				))}
+				{canReview && subject ? (
+					<div className="stack review-form">
+						<label className="field">
+							Review note
+							<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} />
+							<span className="hint">A review records your judgment beside the finding. It does not edit the finding or change any investor-verified criterion.</span>
+						</label>
+						<ErrorNote error={a.error} />
+						<div className="row">
+							<button disabled={a.busy || !note.trim()} onClick={() => decide("confirm")}>Confirm</button>
+							<button className="quiet" disabled={a.busy || !note.trim()} onClick={() => decide("dispute")}>Dispute</button>
+							<button className="quiet" disabled={a.busy || !note.trim()} onClick={() => decide("dismiss")}>Dismiss</button>
+							<button className="quiet" disabled={a.busy || !note.trim()} onClick={() => decide("flag")}>Flag for review</button>
+						</div>
+					</div>
+				) : null}
+			</div>
+		</details>
 	);
 }

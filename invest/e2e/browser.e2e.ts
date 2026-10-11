@@ -25,11 +25,12 @@ function check(condition: unknown, message: string): asserts condition {
 }
 
 const jev = startJevStandin({ port: 0, apiKey: "e2e-key" });
-const web = new FakeWeb({
+const sites = {
 	"alpine.vc": thesisSite(),
 	"quiet.vc": { "/robots.txt": { status: 404 }, "/": html("Quiet Capital", `<p>${"Quiet Capital is a firm that values patience. ".repeat(12)}</p>`) },
 	"walled.vc": { "/robots.txt": { type: "text/plain", body: "User-agent: *\nDisallow: /\n" }, "/": html("Walled", "x") },
-});
+};
+const web = new FakeWeb(sites);
 const h = await startHttpHarness({
 	fetcherFor: web.fetcherFor,
 	webDist: join(root, "apps/invest-web/dist"),
@@ -184,6 +185,45 @@ try {
 	await page.click("button:has-text('Refresh research')");
 	await page.waitForFunction(() => Array.from(document.querySelectorAll("h2")).find((h) => h.textContent === "Research runs")?.closest("section")?.querySelectorAll("tbody tr").length === 2, undefined, { timeout: 20000 });
 	check(true, "a refresh can be requested and adds a run to the history");
+
+	console.log("monitoring and timeline");
+	const alpine = (await research.lookup(actor("ws-a"), "alpine.vc"))!;
+	await h.runtime.service.monitoring.register(actor("ws-a"), alpine);
+	await page.click("nav >> text=Investors");
+	await page.click("a:has-text('Alpine Ventures')");
+	await page.waitForSelector("[data-testid=monitoring]");
+	check(await page.isVisible("[data-testid=monitoring] >> text=Monitored"), "a registered firm shows its monitoring schedule");
+	await page.click("button:has-text('Pause monitoring')");
+	await page.waitForSelector("[data-testid=monitoring] >> text=The profile and history are kept");
+	check(await page.isVisible("button:has-text('Resume monitoring')"), "monitoring can be paused from the browser, keeping history");
+	check(await page.isVisible("summary:has-text('check size')"), "the profile is untouched by pausing");
+	await page.click("button:has-text('Resume monitoring')");
+	await page.waitForSelector("button:has-text('Pause monitoring')");
+	// The firm publishes a new check size; one monitoring cycle (no waiting for an interval) finds it.
+	sites["alpine.vc"]["/thesis"] = html("Our investment thesis", "<h1>Investment thesis</h1><p>We invest in pre-seed and seed stage fintech and climate companies in Europe and the United Kingdom.</p><p>Our typical check size is $1M-$3M.</p><p>We do not invest in crypto or gaming companies.</p>");
+	const cycle = await h.runtime.service.monitoring.runCycle({ workspaceIds: ["ws-a"] });
+	check(cycle.entries.some((e) => e.domain === "alpine.vc" && e.result === "ran"), "an on-demand monitoring cycle checks the firm");
+	await page.reload();
+	await page.waitForSelector("[data-testid=timeline]");
+	await page.selectOption("label:has-text('Type') select", "thesis_finding");
+	await page.waitForSelector("details.tl[data-type=thesis_finding]");
+	check(await page.isVisible("details.tl[data-type=thesis_finding] >> text=Published check size changed"), "a changed check size becomes a proposed thesis change");
+	check(await page.isVisible("details.tl[data-type=thesis_finding]:has-text('Published check size changed') >> text=needs review"), "and is routed for review");
+	await page.click("details.tl[data-type=thesis_finding]:has-text('Published check size changed') summary");
+	check(await page.isVisible("details[open] blockquote.passage >> text=$1M-$3M"), "the finding links to its supporting passage");
+	check(await page.isVisible("details[open] dt:has-text('Discovered')"), "publication, discovery and review dates are shown apart");
+	await page.fill("details[open] label:has-text('Review note') input", "Confirmed on the thesis page.");
+	await page.click("details[open] button:has-text('Confirm')");
+	await page.waitForSelector("details.tl[data-type=thesis_finding]:has-text('Published check size changed') .tag.review-confirmed");
+	check(await page.isVisible("text=Nothing here has been adopted as investor-verified") === false, "the approved check size is still listed as investor-verified");
+	check(await page.isVisible("li:has-text('check size')"), "the investor-verified value is unchanged by the finding");
+	await page.selectOption("label:has-text('Type') select", "research_failed");
+	await page.waitForSelector("text=Nothing matches");
+	check(true, "timeline filters narrow the list");
+	await snap("e2e-timeline");
+	await page.click("nav >> text=Investors");
+	await page.waitForSelector("td:has-text('Alpine Ventures')");
+	check(await page.isVisible("td >> text=Monitored"), "the directory shows monitoring state");
 
 	console.log("audit");
 	await page.click("nav >> text=Audit trail");
