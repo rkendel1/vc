@@ -238,4 +238,30 @@ app AttnInvest {
     index workspaceId using hash(workspaceId)
     index chainId using hash(chainId)
   }
+  collection startup_profiles {
+    workspaceId: text
+    startupId: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+  }
+  collection startup_profile_versions {
+    workspaceId: text
+    startupId: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+  }
+  collection match_evaluations {
+    workspaceId: text
+    startupId: text
+    investorKey: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+    index investorKey using hash(investorKey)
+  }
+  collection shortlist_entries {
+    workspaceId: text
+    startupId: text
+    index workspaceId using hash(workspaceId)
+    index startupId using hash(startupId)
+  }
 }

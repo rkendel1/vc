@@ -10,6 +10,8 @@ import { DocumentIngestionModule, type IngestionLimits } from "./modules/documen
 import { EvaluationOrchestrator, type OrchestratorOptions } from "./modules/evaluation-orchestrator.ts";
 import { EvidenceRegistryModule } from "./modules/evidence-registry.ts";
 import { InvestorResearchModule, type ResearchDeps } from "./modules/investor-research.ts";
+import { FounderMatchingModule } from "./modules/founder-matching.ts";
+import { FounderProfileModule } from "./modules/founder-profiles.ts";
 import { ParticipationModule } from "./modules/participation.ts";
 import { ReconciliationModule } from "./modules/reconciliation.ts";
 import { SourceIngestionModule, type IngestionDeps } from "./modules/source-ingestion.ts";
@@ -45,6 +47,8 @@ export class InvestmentService {
 	readonly sources: SourceIngestionModule;
 	readonly participation: ParticipationModule;
 	readonly reconciliation: ReconciliationModule;
+	readonly profiles: FounderProfileModule;
+	readonly matching: FounderMatchingModule;
 
 	constructor(private readonly deps: ServiceDeps) {
 		this.theses = new InvestmentThesisModule(deps.store);
@@ -60,6 +64,8 @@ export class InvestmentService {
 		this.monitoring.setIngestion(this.sources);
 		this.participation = new ParticipationModule({ store: deps.store, research: this.research, fetcherFor: deps.research.fetcherFor, limits: deps.research.defaults });
 		this.reconciliation = new ReconciliationModule({ store: deps.store, research: this.research, participation: this.participation, sources: this.sources, staleAfterDays: deps.research.staleAfterDays });
+		this.profiles = new FounderProfileModule(deps.store);
+		this.matching = new FounderMatchingModule({ store: deps.store, profiles: this.profiles, evidence: this.evidence, research: this.research, reconciliation: this.reconciliation, participation: this.participation });
 	}
 
 	get jevIdentity() {

@@ -7,6 +7,7 @@ import { CRITERION_FIELDS, RESEARCH_STATUSES, type CriterionField, type Research
 import { METRIC_KEYS, OUTCOMES, SOURCE_TYPES, type Actor, type InvestmentCriterion, type ThesisSettings } from "../domain/types.ts";
 import { validateThesisContent } from "../modules/investment-thesis.ts";
 import type { InvestmentService } from "../service.ts";
+import type { DiscoverFilters } from "../modules/founder-matching.ts";
 
 /**
  * The declared AppPort surface of the investment application. Handlers are thin: resolve the
@@ -1086,6 +1087,159 @@ function strip<T extends { requestKey?: string; manifest?: unknown }>(e: T) {
 	return rest;
 }
 
+// ---------------------------------------------------------------------------
+// founder matching (VC-5): private profile, fit evaluation, shortlist
+// ---------------------------------------------------------------------------
+
+export const startupProfileGet = defineCapability({
+	name: "startup.profile.get",
+	version: 1,
+	description: "The startup's private profile (current version, its content with per-field provenance, and the version history).",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id() }),
+	output: out("startup", "version", "content", "versions"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string }) => {
+		const p = await svc.profiles.get(actor, input.startupId);
+		return { startup: p.startup, version: p.version, content: p.content, versions: p.versions };
+	}),
+});
+
+export const startupProfileSave = defineCapability({
+	name: "startup.profile.save",
+	version: 1,
+	description: "Saves the startup profile as a new immutable version, fenced on expectedVersion (0 for the first). Saving identical content creates no new version. Unknown and not-applicable are valid field states.",
+	authorization: ["startup.write"],
+	concurrency: { mode: "keyed", key: "startupId" },
+	input: s.object({ startupId: id(), expectedVersion: s.integer(), content: s.unknown(), note: s.optional(s.string()) }),
+	output: out("unchanged", "version", "content", "versions"),
+	attributes: contract("version-fenced; identical content is a no-op"),
+	handler: run(async (svc, actor, input: { startupId: string; expectedVersion: number; content: unknown; note?: string }) => {
+		const r = await svc.profiles.save(actor, input);
+		return { unchanged: r.unchanged, version: r.version, content: r.content, versions: r.versions };
+	}),
+});
+
+const filtersSchema = s.object({
+	stage: s.optional(s.array(s.string(), { maxItems: 12 })),
+	sector: s.optional(s.array(s.string(), { maxItems: 12 })),
+	geography: s.optional(s.array(s.string(), { maxItems: 12 })),
+	businessModel: s.optional(s.array(s.string(), { maxItems: 12 })),
+	checkSize: s.optional(s.object({ minUsd: s.optional(s.number()), maxUsd: s.optional(s.number()) })),
+	approvedOnly: s.optional(s.boolean()),
+	freshOnly: s.optional(s.boolean()),
+	coverage: s.optional(s.array(s.string(), { maxItems: 5 })),
+	mandate: s.optional(s.array(s.string(), { maxItems: 5 })),
+	unknown: s.optional(s.boolean()),
+	includeFounderExcluded: s.optional(s.boolean()),
+	query: s.optional(s.string()),
+});
+type FiltersIn = { checkSize?: { minUsd?: number; maxUsd?: number } } & Record<string, unknown>;
+const asFilters = (f: FiltersIn | undefined): DiscoverFilters | undefined => (f ? ({ ...f, checkSize: f.checkSize ? { minUsd: f.checkSize.minUsd ?? null, maxUsd: f.checkSize.maxUsd ?? null } : undefined } as DiscoverFilters) : undefined);
+
+export const fitDiscover = defineCapability({
+	name: "fit.discover",
+	version: 1,
+	description: "Candidate investors for a startup, each with mandate fit, readiness, evidence quality and research coverage kept separate. Computed on demand from the current profile; nothing is stored.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id(), filters: s.optional(filtersSchema) }),
+	output: out("candidates", "total", "shown", "empty", "profileVersion", "policyVersion", "evaluatedAt"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string; filters?: FiltersIn }) => {
+		const r = await svc.matching.discover(actor, { startupId: input.startupId, filters: asFilters(input.filters) });
+		return { candidates: r.candidates, total: r.total, shown: r.shown, empty: r.empty, profileVersion: r.profileVersion, policyVersion: r.policyVersion, evaluatedAt: r.evaluatedAt };
+	}),
+});
+
+export const fitEvaluate = defineCapability({
+	name: "fit.evaluate",
+	version: 1,
+	description: "Evaluates one investor against the startup's current profile and evidence and records the evaluation with every input version. Identical inputs return the existing evaluation; changed inputs create a new one and never alter an earlier one.",
+	authorization: ["evaluation.run"],
+	input: s.object({ startupId: id(), investorKey: s.string() }),
+	output: out("evaluation", "reused", "previous"),
+	attributes: contract("idempotent on the versioned inputs: identical inputs return the same evaluation"),
+	handler: run(async (svc, actor, input: { startupId: string; investorKey: string }) => svc.matching.evaluate(actor, input)),
+});
+
+export const fitGet = defineCapability({
+	name: "fit.get",
+	version: 1,
+	description: "A recorded evaluation with its explanation, and whether its inputs are still current.",
+	authorization: ["invest.read"],
+	input: s.object({ evaluationId: id() }),
+	output: out("evaluation", "staleness"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { evaluationId: string }) => svc.matching.get(actor, input.evaluationId)),
+});
+
+export const fitHistory = defineCapability({
+	name: "fit.history",
+	version: 1,
+	description: "Recorded evaluations for a startup, newest first, optionally for one investor.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id(), investorKey: s.optional(s.string()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string; investorKey?: string }) => ({ items: await svc.matching.history(actor, input) })),
+});
+
+export const fitCompare = defineCapability({
+	name: "fit.compare",
+	version: 1,
+	description: "What differs between two evaluations of the same startup and investor: inputs, then results.",
+	authorization: ["invest.read"],
+	input: s.object({ fromId: id(), toId: id() }),
+	output: out("from", "to", "inputs", "results"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { fromId: string; toId: string }) => svc.matching.compare(actor, input)),
+});
+
+const shortlistStatus = s.enum(["considering", "ready", "parked", "ruled_out"]);
+export const shortlistSave = defineCapability({
+	name: "shortlist.save",
+	version: 1,
+	description: "Adds an investor to the startup's private shortlist, or restores a removed one.",
+	authorization: ["startup.write"],
+	input: s.object({ startupId: id(), investorKey: s.string(), status: s.optional(shortlistStatus), note: s.optional(s.string()) }),
+	output: out("entry"),
+	attributes: contract("idempotent: one entry per startup and investor"),
+	handler: run(async (svc, actor, input: { startupId: string; investorKey: string; status?: "considering" | "ready" | "parked" | "ruled_out"; note?: string }) => ({ entry: await svc.matching.shortlistSave(actor, input) })),
+});
+
+export const shortlistUpdate = defineCapability({
+	name: "shortlist.update",
+	version: 1,
+	description: "Changes a shortlist entry's status or note, marks recommended actions done or dismissed, or removes it. Fenced on expectedVersion.",
+	authorization: ["startup.write"],
+	input: s.object({ entryId: id(), expectedVersion: s.integer(), status: s.optional(shortlistStatus), note: s.optional(s.string()), actions: s.optional(s.unknown()), remove: s.optional(s.boolean()) }),
+	output: out("entry"),
+	attributes: contract("version-fenced"),
+	handler: run(async (svc, actor, input: { entryId: string; expectedVersion: number; status?: "considering" | "ready" | "parked" | "ruled_out"; note?: string; actions?: unknown; remove?: boolean }) => ({ entry: await svc.matching.shortlistUpdate(actor, { ...input, actions: input.actions as Record<string, "open" | "done" | "dismissed"> | undefined }) })),
+});
+
+export const shortlistList = defineCapability({
+	name: "shortlist.list",
+	version: 1,
+	description: "The startup's private shortlist with each investor's latest evaluation, whether it is still current, and its prioritised recommended actions.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id(), includeRemoved: s.optional(s.boolean()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string; includeRemoved?: boolean }) => ({ items: await svc.matching.shortlist(actor, input) })),
+});
+
+export const shortlistPlan = defineCapability({
+	name: "shortlist.plan",
+	version: 1,
+	description: "Open recommended actions across the shortlist, in priority order. Recommendations about the startup's materials, not predictions.",
+	authorization: ["invest.read"],
+	input: s.object({ startupId: id() }),
+	output: out("actions"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { startupId: string }) => ({ actions: await svc.matching.actionPlan(actor, input) })),
+});
+
 export function investCapabilities(options: { maxUploadBytes: number }) {
 	return [
 		sessionWhoami,
@@ -1162,5 +1316,16 @@ export function investCapabilities(options: { maxUploadBytes: number }) {
 		contributionSharedWithFirm,
 		contributionModeratorQueue,
 		contributionRespond,
+		startupProfileGet,
+		startupProfileSave,
+		fitDiscover,
+		fitEvaluate,
+		fitGet,
+		fitHistory,
+		fitCompare,
+		shortlistSave,
+		shortlistUpdate,
+		shortlistList,
+		shortlistPlan,
 	];
 }

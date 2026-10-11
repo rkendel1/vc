@@ -54,6 +54,10 @@ export const C = {
 	contributionShares: "contribution_shares",
 	publishedProfiles: "published_profiles",
 	contributionResponses: "contribution_responses",
+	startupProfiles: "startup_profiles",
+	startupProfileVersions: "startup_profile_versions",
+	matchEvaluations: "match_evaluations",
+	shortlistEntries: "shortlist_entries",
 } as const;
 export type CollectionName = (typeof C)[keyof typeof C];
 

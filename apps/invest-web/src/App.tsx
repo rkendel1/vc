@@ -3,6 +3,7 @@ import { call, getToken, setToken } from "./api.ts";
 import { InvestorScreen, InvestorsScreen } from "./screens/Investors.tsx";
 import { AuditScreen } from "./screens/Audit.tsx";
 import { ReportScreen } from "./screens/Report.tsx";
+import { FounderScreen } from "./screens/Founder.tsx";
 import { StartupScreen, StartupsScreen } from "./screens/Startups.tsx";
 import { ThesesScreen, ThesisScreen } from "./screens/Theses.tsx";
 import { WorkspaceScreen } from "./screens/Workspace.tsx";
@@ -81,6 +82,7 @@ function SignIn({ error, onSignedIn }: { error: string | null; onSignedIn: () =>
 
 const NAV = [
 	{ path: "", label: "Workspace" },
+	{ path: "founder", label: "Founder", needs: "startup.write" },
 	{ path: "theses", label: "Theses" },
 	{ path: "startups", label: "Startups" },
 	{ path: "investors", label: "Investors" },
@@ -89,9 +91,11 @@ const NAV = [
 
 function Shell({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
 	const route = useRoute();
-	const section = route[0] === "evaluations" ? "startups" : (route[0] ?? "");
+	const section = route[0] === "evaluations" ? "startups" : (route[0] ?? (session.principal.role === "founder" ? "founder" : ""));
 	let screen;
-	if (route[0] === "theses" && route[1]) screen = <ThesisScreen thesisId={route[1]} />;
+	if (route[0] === "founder") screen = <FounderScreen startupId={route[1]} />;
+	else if (route[0] === undefined && session.principal.role === "founder") screen = <FounderScreen />;
+	else if (route[0] === "theses" && route[1]) screen = <ThesisScreen thesisId={route[1]} />;
 	else if (route[0] === "theses") screen = <ThesesScreen />;
 	else if (route[0] === "startups" && route[1]) screen = <StartupScreen startupId={route[1]} />;
 	else if (route[0] === "startups") screen = <StartupsScreen />;
@@ -108,7 +112,7 @@ function Shell({ session, onSignOut }: { session: Session; onSignOut: () => void
 					<div className="workspace">{session.principal.workspaceName}</div>
 				</div>
 				<nav aria-label="Sections">
-					{NAV.map((n) => (
+					{NAV.filter((n) => !("needs" in n) || session.principal.permissions.includes(n.needs as string)).map((n) => (
 						<a key={n.path} href={n.path ? href(n.path) : "#/"} aria-current={section === n.path ? "page" : undefined}>
 							{n.label}
 						</a>
