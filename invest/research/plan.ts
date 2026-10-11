@@ -109,7 +109,7 @@ export function planRun(i: PlanInput): RunPlan {
 			extracted = ex.criteria;
 			excerpts = ex.relevantExcerpts.slice(0, 8);
 			if (EVENT_KINDS.has(page.kind)) {
-				const base = { firmName: firm.name, kind: page.kind, links: page.parsed.links, scopeDomain: firm.canonicalDomain };
+				const base = { firmName: firm.name, firmAliases: [firm.canonicalDomain.split(".")[0]!, ...(homeTitle ? [homeTitle.split(/\s+[|–—·:-]\s+/)[0]!] : [])], kind: page.kind, links: page.parsed.links, scopeDomain: firm.canonicalDomain };
 				const ev = feedOk ? extractEventsFromFeed(feedOk.items, base) : extractEventsFromBlocks(blocks, { ...base, publishedAt });
 				hostile ||= ev.hostile;
 				candidates = ev.candidates;

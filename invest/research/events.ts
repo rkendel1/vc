@@ -85,6 +85,14 @@ export type EventCandidate = {
 	passageHash: string;
 };
 
+/** The passage itself ties the firm (by name or as "we/our") to an investing verb. "Led by Someone Else" does not. */
+function firmTookPart(sentence: string, firmNames: string[]): boolean {
+	if (!INVOLVEMENT.test(sentence)) return false;
+	const lower = sentence.toLowerCase();
+	const named = firmNames.flatMap((n) => [n, n.split(/\s+/)[0] ?? ""]).filter((n) => n.length >= 4).some((n) => lower.includes(n.toLowerCase()));
+	return named || /\b(?:we|our|we're|we've)\b/i.test(sentence);
+}
+
 function findCompany(sentence: string, firmName: string): string | null {
 	const patterns: RegExp[] = [
 		new RegExp(`${NAME}['’]s\\s+(?:${MONEY}\\s+)?${STAGE_ANYCASE}\\b`),
@@ -101,7 +109,7 @@ function findCompany(sentence: string, firmName: string): string | null {
 	return null;
 }
 
-export type EventSource = { firmName: string; kind: string; links: { url: string; text: string }[]; publishedAt: string | null; scopeDomain: string };
+export type EventSource = { firmName: string; /** Other names the firm goes by on its own site: the domain label, the home page title. */ firmAliases?: string[]; kind: string; links: { url: string; text: string }[]; publishedAt: string | null; scopeDomain: string };
 
 function linkFor(name: string, links: EventSource["links"], scopeDomain: string): string | null {
 	const key = companyKey(name);
@@ -147,7 +155,7 @@ export function extractEventsFromSentences(texts: string[], source: EventSource)
 			round,
 			roundAmountUsd,
 			firmAmountUsd,
-			involvement: INVOLVEMENT.test(sentence) || sentence.toLowerCase().includes(companyKey(source.firmName)) ? "stated" : "implied_by_source",
+			involvement: firmTookPart(sentence, [source.firmName, ...(source.firmAliases ?? [])]) ? "stated" : "implied_by_source",
 			announcedAt: dateInText(sentence),
 			publishedAt: source.publishedAt,
 			passage,
@@ -225,7 +233,7 @@ export function matchEvent(c: Pick<EventCandidate, "companyKey" | "type" | "anno
 		const a = tokens(e.companyKey);
 		const b = tokens(c.companyKey);
 		const subset = (x: string[], y: string[]) => x.length > 0 && x.every((t) => y.includes(t));
-		return subset(a, b) || subset(b, a) || (e.companyKey.length >= 5 && editDistanceAtMost1(e.companyKey, c.companyKey));
+		return subset(a, b) || subset(b, a) || (e.companyKey.length >= 4 && editDistanceAtMost1(e.companyKey, c.companyKey));
 	});
 	return similar.length ? { kind: "uncertain", candidates: similar } : { kind: "new" };
 }
