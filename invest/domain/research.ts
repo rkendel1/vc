@@ -19,7 +19,7 @@ export type CriterionField = (typeof CRITERION_FIELDS)[number];
 
 export type AssertionType = "explicit" | "observed" | "inferred";
 export type SourceClass = "official_website" | "official_publication" | "third_party" | "other";
-export type PageKind = "thesis" | "criteria" | "portfolio" | "announcement" | "faq" | "team" | "home" | "other";
+export type PageKind = "thesis" | "criteria" | "portfolio" | "announcement" | "faq" | "team" | "home" | "feed" | "other";
 
 /** What happened when a page was requested. */
 export type FetchOutcome =
@@ -59,6 +59,10 @@ export type ResearchSource = {
 	contentType: string | null;
 	title: string | null;
 	contentHash: string | null;
+	/** Hash of the content after navigation, boilerplate, dates and formatting are removed. Identity of the source version. */
+	normalizedHash: string | null;
+	/** Publication date declared by the page or feed (metadata), if any. Not the discovery date. */
+	publishedAt: string | null;
 	/** Only the passages relevant to research, never the page. */
 	excerpts: string[];
 	/** The page contained text that tries to instruct a reader; those sentences were not used. */
@@ -91,6 +95,12 @@ export type ResearchRun = {
 	extractorVersion: string;
 	limits: ResearchLimits;
 	outcome: ResearchStatus | null;
+	/** The homepage was read: this run counts as a successful check for monitoring and "last successful research". */
+	success: boolean;
+	/** Criteria kept from earlier runs because their page could not be re-read this time. */
+	carriedCriterionIds: string[];
+	/** Monitoring: this was the firm's first completed run, so everything found is baseline, not news. */
+	baseline: boolean;
 	/** Why the outcome is what it is, in this run's own terms. */
 	outcomeReasons: string[];
 	checks: SourceCheck[];
@@ -136,7 +146,9 @@ export type CriterionVerification = {
 	id: string;
 	workspaceId: string;
 	firmId: string;
-	criterionId: string;
+	/** Exactly one of criterionId / eventId is set. */
+	criterionId: string | null;
+	eventId: string | null;
 	status: Exclude<VerificationStatus, "pending">;
 	passageHash: string;
 	statement: string;
@@ -148,7 +160,7 @@ export type CriterionVerification = {
 	createdBy: string;
 };
 
-export type ReviewAction = "flag" | "dispute" | "correct" | "note";
+export type ReviewAction = "flag" | "dispute" | "correct" | "note" | "confirm" | "dismiss";
 
 /** Immutable. A correction records what the reviewer says; it is never silently turned into an approved criterion. */
 export type ResearchReview = {
@@ -156,6 +168,8 @@ export type ResearchReview = {
 	workspaceId: string;
 	firmId: string;
 	criterionId: string | null;
+	eventId: string | null;
+	findingId: string | null;
 	action: ReviewAction;
 	note: string;
 	correctedValue: string | null;
@@ -195,8 +209,11 @@ export type InvestorFirm = {
 	researchStatus: ResearchStatus;
 	lastRunId: string | null;
 	lastRunStartedAt: string | null;
+	/** When the latest run finished, successful or not. */
 	lastResearchedAt: string | null;
-	/** The criteria of the latest completed run. */
+	/** When the homepage was last read successfully. Independent of the most recent attempt. */
+	lastSuccessAt: string | null;
+	/** The criteria of the latest completed run, plus any carried forward from pages that could not be re-read. */
 	currentCriterionIds: string[];
 	conflictCount: number;
 	sourcesChecked: number;
@@ -220,6 +237,8 @@ export type CriterionView = ResearchCriterion & {
 	freshness: Freshness;
 	/** Portfolio-derived patterns cannot be verified from one passage. */
 	verificationApplicable: boolean;
+	/** Kept from an earlier run because its page could not be re-read; ages until the page is read again. */
+	carriedForward: boolean;
 	lastConfirmedAt: string;
 	current: boolean;
 	reviews: ResearchReview[];
@@ -231,8 +250,8 @@ export type Conflict = { kind: ConflictKind; field: CriterionField; value: strin
 
 export type FirmListItem = Pick<
 	InvestorFirm,
-	"id" | "name" | "website" | "canonicalDomain" | "researchStatus" | "lastResearchedAt" | "conflictCount" | "sourcesChecked" | "stubReasons"
-> & { criteriaCount: number; explicitCount: number; stale: boolean; stub: boolean; retryable: boolean };
+	"id" | "name" | "website" | "canonicalDomain" | "researchStatus" | "lastResearchedAt" | "lastSuccessAt" | "conflictCount" | "sourcesChecked" | "stubReasons"
+> & { criteriaCount: number; explicitCount: number; stale: boolean; stub: boolean; retryable: boolean; monitoring: MonitoringSummary | null };
 
 export type FirmProfile = {
 	firm: InvestorFirm;
@@ -249,8 +268,196 @@ export type FirmProfile = {
 	reviews: ResearchReview[];
 	staleAfterDays: number;
 	stale: boolean;
+	monitoring: MonitoringTarget | null;
+	events: InvestmentEventView[];
+	findings: ResearchFinding[];
+	health: ResearchHealth;
 	disclaimer: string;
 };
 
 export const RESEARCH_DISCLAIMER =
 	"Published material may not fully or currently represent the firm's strategy. These are public-source research findings, not an investor-approved thesis.";
+
+// --------------------------------------------------------------------------- monitoring (VC-3)
+
+export type MonitoringTarget = {
+	/** Equal to the firm id: one target per firm. */
+	id: string;
+	workspaceId: string;
+	firmId: string;
+	canonicalDomain: string;
+	website: string;
+	enabled: boolean;
+	intervalMinutes: number;
+	/** Optional per-firm crawl bounds, never above the configured ceilings. */
+	limits: { maxPages: number | null; maxDepth: number | null };
+	nextCheckAt: string | null;
+	lastAttemptAt: string | null;
+	lastSuccessAt: string | null;
+	lastRunId: string | null;
+	consecutiveFailures: number;
+	lastError: { message: string; retryable: boolean; at: string } | null;
+	/** Held by one worker at a time. Fencing: only the holder of `token` may complete the check. */
+	lease: { ownerId: string; token: string; acquiredAt: string; expiresAt: string } | null;
+	pausedAt: string | null;
+	pausedBy: string | null;
+	createdAt: string;
+	createdBy: string;
+	updatedAt: string;
+	__version?: number;
+};
+
+export type MonitoringSummary = Pick<MonitoringTarget, "enabled" | "intervalMinutes" | "nextCheckAt" | "lastAttemptAt" | "lastSuccessAt" | "consecutiveFailures"> & { running: boolean };
+
+/** Current state of one source URL: what was last read successfully, independent of later failures. */
+export type SourceState = {
+	id: string;
+	workspaceId: string;
+	firmId: string;
+	url: string;
+	status: "present" | "missing" | "inaccessible";
+	pageKind: PageKind;
+	firstSeenAt: string;
+	lastCheckedAt: string;
+	lastOutcome: FetchOutcome;
+	consecutiveMisses: number;
+	/** Preserved when later checks fail. */
+	lastSuccessAt: string | null;
+	lastSuccessSourceId: string | null;
+	lastNormalizedHash: string | null;
+	/** Claim keys extracted from the last successful snapshot (field|polarity|value|assertion). */
+	claimKeys: string[];
+	/** Company names listed on a portfolio page at the last successful snapshot. */
+	entries: string[];
+	/** Short hashes of the normalised content blocks at the last successful snapshot (content itself is not kept). */
+	blockHashes: string[];
+	__version?: number;
+};
+
+export type EventType = "new_investment" | "seed_round" | "venture_round" | "follow_on" | "acquisition" | "portfolio_addition" | "other";
+export type EventClassification = "new" | "historical" | "undated";
+export type EventReviewState = "unreviewed" | "needs_review" | "confirmed" | "dismissed" | "disputed";
+
+export type InvestmentEvent = {
+	id: string;
+	workspaceId: string;
+	firmId: string;
+	type: EventType;
+	companyName: string;
+	companyKey: string;
+	/** Link text from the firm's own page. Recorded, never fetched. */
+	companyUrl: string | null;
+	/** unique: no similar company known; uncertain: a similarly named company already has an event (not merged). */
+	companyMatch: { status: "unique" | "uncertain"; candidateEventIds: string[] };
+	round: string | null;
+	/** Only ever the amount of a *round*, taken verbatim from a source. A firm's own cheque is never inferred from it. */
+	roundAmountUsd: number | null;
+	firmAmountUsd: number | null;
+	amountSourceStated: boolean;
+	/** "stated": the passage says the firm took part. "implied_by_source": the firm's own post announces the round. */
+	involvement: "stated" | "implied_by_source";
+	/** The announcement date written in the passage, if any. */
+	announcedAt: string | null;
+	earliestPublishedAt: string | null;
+	discoveredAt: string;
+	discoveryRunId: string;
+	classification: EventClassification;
+	extractorVersion: string;
+	/** Newly discovered by a non-baseline run. Baseline events are context, not news. */
+	baseline: boolean;
+};
+
+export type EventEvidence = {
+	id: string;
+	workspaceId: string;
+	firmId: string;
+	eventId: string;
+	sourceId: string;
+	url: string;
+	passage: string;
+	passageHash: string;
+	publishedAt: string | null;
+	/** The announcement date written in this passage, if any. */
+	announcedAt: string | null;
+	/** What this passage itself states. The event view fills gaps from here; the event record stays immutable. */
+	type: EventType;
+	round: string | null;
+	roundAmountUsd: number | null;
+	firmAmountUsd: number | null;
+	runId: string;
+	discoveredAt: string;
+};
+
+export type InvestmentEventView = InvestmentEvent & {
+	evidence: EventEvidence[];
+	reviewState: EventReviewState;
+	reviews: ResearchReview[];
+	verification: VerificationStatus;
+	verificationDetail: CriterionVerification | null;
+	/** Independent evidence from more than one source. */
+	corroborated: boolean;
+};
+
+export type FindingKind = "thesis_addition" | "thesis_modification" | "thesis_contradiction" | "thesis_retraction" | "thesis_conflict" | "inferred_pattern" | "source_changed" | "source_missing";
+
+/** Immutable, versioned per subject: a later change to the same subject is version n+1, never an edit. */
+export type ResearchFinding = {
+	id: string;
+	workspaceId: string;
+	firmId: string;
+	kind: FindingKind;
+	severity: "material" | "informational";
+	/** Stable identity of what the finding is about (field/value/polarity or a source URL). */
+	subjectKey: string;
+	subject: { field: CriterionField | "source"; value: string; polarity: "include" | "exclude" | null };
+	version: number;
+	supersedesId: string | null;
+	summary: string;
+	previousCriterionIds: string[];
+	newCriterionIds: string[];
+	/** Approved values this touches. The finding never changes them. */
+	approvalIds: string[];
+	evidence: { sourceId: string; url: string; passage: string; publishedAt: string | null }[];
+	runId: string;
+	priorRunId: string | null;
+	discoveredAt: string;
+	reviewRequired: boolean;
+	extractorVersion: string;
+	reviewState?: EventReviewState;
+	reviews?: ResearchReview[];
+	verification?: VerificationStatus;
+};
+
+export type ResearchHealth = {
+	lastAttemptAt: string | null;
+	lastSuccessAt: string | null;
+	consecutiveFailures: number;
+	failing: boolean;
+	stale: boolean;
+	staleSources: { url: string; lastSuccessAt: string | null; status: SourceState["status"] }[];
+	inaccessibleSources: number;
+	missingSources: number;
+};
+
+export type TimelineItemType = "investment_event" | "portfolio_addition" | "source_discovered" | "source_changed" | "source_missing" | "thesis_finding" | "conflict" | "research_failed" | "review";
+
+export type TimelineItem = {
+	id: string;
+	type: TimelineItemType;
+	/** What the item is about, in plain words. */
+	title: string;
+	detail: string;
+	/** Dates are never merged: when the source says it happened, when we found it, when a person reviewed it. */
+	publishedAt: string | null;
+	announcedAt: string | null;
+	discoveredAt: string;
+	reviewedAt: string | null;
+	reviewState: EventReviewState | "not_applicable";
+	/** investor activity vs research health: failures are never presented as activity. */
+	category: "investment_activity" | "strategy" | "source" | "health" | "review";
+	baseline: boolean;
+	evidence: { sourceId: string | null; url: string; passage: string | null }[];
+	refs: { eventId?: string; findingId?: string; runId?: string; criterionId?: string; sourceId?: string };
+};
+
+export type AttentionItem = { firmId: string; firmName: string; kind: "new_investment" | "strategy_change" | "needs_review" | "research_failing" | "research_stale"; title: string; at: string; refId: string };

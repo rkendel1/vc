@@ -1,5 +1,7 @@
-import { ConditionalConflictError, FileJsDb, getTelemetryClient, open, type StateFirstDB } from "@feltdb/core";
+import { ConditionalConflictError, FileJsDb, getTelemetryClient, open, parseFlowSpec, validateFlowSpec, type StateFirstDB } from "@feltdb/core";
+import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { newId, type Clock, systemClock } from "../domain/canonical.ts";
 import { conflict } from "../domain/errors.ts";
 import type { Actor, AuditEvent } from "../domain/types.ts";
@@ -33,30 +35,34 @@ export const C = {
 	criterionVerifications: "criterion_verifications",
 	researchReviews: "research_reviews",
 	firmApprovals: "firm_approvals",
+	monitoringTargets: "monitoring_targets",
+	sourceStates: "source_states",
+	investmentEvents: "investment_events",
+	eventEvidence: "event_evidence",
+	researchFindings: "research_findings",
 } as const;
 export type CollectionName = (typeof C)[keyof typeof C];
 
-/** Secondary fields each collection is filtered by, besides workspaceId. */
-const INDEXED: Record<CollectionName, string[]> = {
-	investment_theses: [],
-	thesis_versions: ["thesisId"],
-	startups: [],
-	documents: ["startupId"],
-	document_pages: ["documentId"],
-	evidence_items: ["startupId", "documentId"],
-	evaluations: ["startupId", "status"],
-	criterion_findings: ["evaluationId"],
-	review_actions: ["evaluationId"],
-	investment_decisions: ["evaluationId", "startupId"],
-	audit_events: ["eventType"],
-	investor_firms: [],
-	research_runs: ["firmId"],
-	research_sources: ["firmId"],
-	research_criteria: ["firmId"],
-	criterion_verifications: ["firmId"],
-	research_reviews: ["firmId"],
-	firm_approvals: ["firmId"],
-};
+/**
+ * The durable state declaration. `feltdb.flow` is authoritative for which collections exist and how
+ * they are indexed (FeltDB invariant FELTDB-007: no independent representation of a .flow
+ * declaration). This module compiles it; `C` only gives the declared names a typed handle, and the
+ * two must agree exactly or the process refuses to start.
+ */
+export const FLOW_FILE = fileURLToPath(new URL("../../feltdb.flow", import.meta.url));
+export const FLOW = parseFlowSpec(readFileSync(FLOW_FILE, "utf8"));
+{
+	const problems = validateFlowSpec(FLOW).filter((d) => d.severity === "error");
+	if (problems.length) throw new Error(`feltdb.flow is invalid: ${problems.map((p) => p.message).join("; ")}`);
+	const declared = FLOW.collections.map((c) => c.name).sort();
+	const named = Object.values(C).sort();
+	if (declared.join() !== named.join())
+		throw new Error(`feltdb.flow and invest/store/store.ts disagree on collections: declared-only [${declared.filter((n) => !(named as string[]).includes(n))}], code-only [${(named as string[]).filter((n) => !declared.includes(n))}]`);
+}
+/** Hash-indexed fields per collection, read from the declaration. */
+const INDEXED: Record<string, string[]> = Object.fromEntries(
+	FLOW.collections.map((c) => [c.name, c.indexes.filter((i) => i.kind === "hash").map((i) => i.expression.replace(/[()\s]/g, "")).filter((f) => f !== "workspaceId")]),
+);
 
 export type StoreWrite = {
 	collection: CollectionName;
@@ -194,6 +200,14 @@ export class InvestStore {
 			throw error;
 		}
 		return events;
+	}
+
+	/**
+	 * Every record of a collection across workspaces. For the monitoring scheduler only, which must
+	 * find due work in all workspaces; capability handlers never use it.
+	 */
+	async scanAll<T>(collection: CollectionName): Promise<T[]> {
+		return this.db.collection<Record<string, unknown>>(collection).all() as unknown as Promise<T[]>;
 	}
 
 	/** Raw, unscoped read used only by integrity checks in tests (e.g. scanning for leaked secrets). */

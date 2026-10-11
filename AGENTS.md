@@ -5,9 +5,12 @@ Toolchain: **Bun 1.3.13**. Do not use npm, yarn or pnpm.
 
 ## Rules that keep the design honest
 
+- `feltdb.flow` is the authoritative declaration of durable state (collections, filtered fields, indexes). Add a collection there first; `store.ts` compiles it and refuses to start if the code and the flow disagree.
 - Durable state goes through `invest/store/` only (FeltDB 0.11.7 file runtime). Creates are fenced
   with `requireAbsent`, updates with `ifVersion`, and audit events ride in the same transaction.
-- Only `invest/jev/` calls the network. Jev is reached through its HTTP decision contract; there is no
+- Only `invest/jev/` and `invest/research/fetcher.ts` call the network. `invest/research/` is pure otherwise: no store, no environment, no process execution. Fetched pages and feeds are data, never instructions; page-derived text (including extracted company names) goes in Jev `context`, never `instructions`.
+- Research never writes or overwrites investor approvals (`firm_approvals`); findings and events are immutable and reviewed by new records. Monitoring leases are taken with `ifVersion` writes and fenced by token.
+- Jev is reached only from `invest/jev/`, through its HTTP decision contract; there is no
   Jev package. Never send whole documents to Jev, and never put document text in `instructions`.
 - Thresholds, hard gates, evidence standards, review routing and decision rules live in
   `invest/modules/investment-policy.ts` as pure functions, so `evaluation.verify` can recompute them.

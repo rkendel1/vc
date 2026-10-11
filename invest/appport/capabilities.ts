@@ -1,5 +1,6 @@
 import { type CapabilityContext, defineCapability, errors, s } from "@appport/sdk";
 import { InvestError } from "../domain/errors.ts";
+import { attentionFor } from "../modules/investor-research.ts";
 import { CRITERION_FIELDS, RESEARCH_STATUSES, type CriterionField, type ResearchStatus, type ReviewAction } from "../domain/research.ts";
 import { METRIC_KEYS, OUTCOMES, SOURCE_TYPES, type Actor, type InvestmentCriterion, type ThesisSettings } from "../domain/types.ts";
 import { validateThesisContent } from "../modules/investment-thesis.ts";
@@ -606,12 +607,48 @@ export const firmVerify = defineCapability({
 export const firmReview = defineCapability({
 	name: "firm.review",
 	version: 1,
-	description: "Flag, dispute, correct or annotate a research result. Recorded as a separate review; the extracted criterion is not changed and is not approved by it.",
+	description: "Flag, dispute, correct, annotate, confirm or dismiss a research criterion, an investment event or a finding. Recorded as a separate review; the research record is not changed and nothing is approved by it.",
 	authorization: ["review.write"],
-	input: s.object({ firmId: id(), criterionId: s.optional(s.nullable(id())), action: s.enum(["flag", "dispute", "correct", "note"]), note: s.string(), correctedValue: s.optional(s.string()) }),
+	input: s.object({ firmId: id(), criterionId: s.optional(s.nullable(id())), eventId: s.optional(s.nullable(id())), findingId: s.optional(s.nullable(id())), action: s.enum(["flag", "dispute", "correct", "note", "confirm", "dismiss"]), note: s.string(), correctedValue: s.optional(s.string()) }),
 	output: out("review"),
 	attributes: contract("append-only"),
-	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string | null; action: ReviewAction; note: string; correctedValue?: string }) => ({ review: await svc.research.review(actor, input) })),
+	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; action: ReviewAction; note: string; correctedValue?: string }) => ({ review: await svc.research.review(actor, input) })),
+});
+
+export const firmMonitoringSet = defineCapability({
+	name: "firm.monitoring.set",
+	version: 1,
+	description: "Pause or resume continuous monitoring of a firm, or change its interval or crawl bounds. Pausing keeps the profile and all history.",
+	authorization: ["research.run"],
+	concurrency: { mode: "keyed", key: "firmId" },
+	input: s.object({ firmId: id(), enabled: s.optional(s.boolean()), intervalMinutes: s.optional(s.integer()), maxPages: s.optional(s.integer()), maxDepth: s.optional(s.integer()) }),
+	output: out("target"),
+	attributes: contract("idempotent: setting the state it already has changes nothing and records nothing"),
+	handler: run(async (svc, actor, input: { firmId: string; enabled?: boolean; intervalMinutes?: number; maxPages?: number; maxDepth?: number }) => ({
+		target: await svc.monitoring.configure(actor, input.firmId, { enabled: input.enabled, intervalMinutes: input.intervalMinutes, ...(input.maxPages !== undefined || input.maxDepth !== undefined ? { limits: { maxPages: input.maxPages ?? null, maxDepth: input.maxDepth ?? null } } : {}) }),
+	})),
+});
+
+export const firmTimeline = defineCapability({
+	name: "firm.timeline",
+	version: 1,
+	description: "The firm's intelligence timeline: investment events, source discoveries and changes, proposed thesis changes, conflicts, failed research and reviews. Filter by type, time range and review state.",
+	authorization: ["invest.read"],
+	input: s.object({ firmId: id(), types: s.optional(s.array(s.string(), { maxItems: 12 })), from: s.optional(s.string()), to: s.optional(s.string()), reviewStates: s.optional(s.array(s.string(), { maxItems: 8 })), limit: s.optional(s.integer()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { firmId: string; types?: string[]; from?: string; to?: string; reviewStates?: string[]; limit?: number }) => ({ items: await svc.research.timeline(actor, input.firmId, input as never) })),
+});
+
+export const attentionList = defineCapability({
+	name: "attention.list",
+	version: 1,
+	description: "What needs a person across the workspace: new investment activity, proposed strategy changes, findings awaiting review, and research that is failing or stale. Each item appears once.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await attentionFor(svc.research, actor) })),
 });
 
 export const firmApprove = defineCapability({
@@ -690,6 +727,9 @@ export function investCapabilities(options: { maxUploadBytes: number }) {
 		firmRefresh,
 		firmVerify,
 		firmReview,
+		firmMonitoringSet,
+		firmTimeline,
+		attentionList,
 		firmApprove,
 		firmApprovalWithdraw,
 	];

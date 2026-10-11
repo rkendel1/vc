@@ -797,3 +797,44 @@ dl.facts dd {
 .small {
 	font-size: 12px;
 }
+
+/* ---------- monitoring and timeline ---------- */
+.attention {
+	margin-bottom: var(--s4);
+}
+.attn {
+	border: 1px solid var(--rule);
+	border-radius: 8px;
+	padding: var(--s2) var(--s3);
+	background: var(--sheet);
+}
+.attn h3 {
+	margin: 0 0 4px;
+	font-size: 14px;
+}
+.attn-new_investment {
+	border-left: 3px solid var(--o-supported);
+}
+.attn-strategy_change {
+	border-left: 3px solid var(--o-partial);
+}
+.attn-needs_review {
+	border-left: 3px dashed var(--o-insufficient);
+}
+.attn-research_failing,
+.attn-research_stale {
+	border-left: 3px dotted var(--o-contradicted);
+}
+.tl-health {
+	border-style: dotted;
+}
+.tag.review-needs_review {
+	border-color: var(--o-partial);
+}
+.tag.review-confirmed {
+	border-color: var(--o-supported);
+}
+.tag.review-dismissed,
+.tag.review-disputed {
+	border-color: var(--o-contradicted);
+}

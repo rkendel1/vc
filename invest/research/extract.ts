@@ -11,7 +11,7 @@ import { sentences } from "./html.ts";
  * the page is flagged. There is no model here, so there is no model confidence: `extractionNote`
  * says only what the rule matched, and "unknown" is a normal result.
  */
-export const EXTRACTOR_VERSION = "invest-research-rules/1.0.0";
+export const EXTRACTOR_VERSION = "invest-research-rules/1.1.0";
 
 const STAGES: [string, RegExp][] = [
 	["pre_seed", /\bpre[- ]?seed\b/i],

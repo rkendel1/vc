@@ -343,7 +343,7 @@ describe("Jev verification boundary and hostile content", () => {
 		const inferred = p.criteria.find((c) => c.assertionType === "inferred")!;
 		expect(inferred.verification).toBe("pending");
 		expect(inferred.verificationApplicable).toBe(false);
-		expect(jev.requests.length).toBe(p.criteria.filter((c) => c.verificationApplicable).length);
+		expect(jev.requests.length).toBe(p.criteria.filter((c) => c.verificationApplicable).length + p.events.filter((e) => e.type !== "portfolio_addition").length); // criteria plus announced events
 		for (const req of jev.requests) {
 			expect(req.kind).toBe("choice");
 			expect(req.context).toContain("UNTRUSTED SOURCE PASSAGE");

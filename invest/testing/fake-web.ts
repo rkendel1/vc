@@ -83,3 +83,39 @@ export function thesisSite(): Record<string, FakeResponse | string> {
 		"/news/seed-round": html("Alpine leads seed round in Gridcell", `<p>Alpine Ventures led the seed round of Gridcell, a climate storage company.</p>`),
 	};
 }
+
+export const rss = (items: { title: string; link?: string; date?: string; desc?: string }[], title = "Meridian news") =>
+	({
+		type: "application/rss+xml",
+		body: `<?xml version="1.0"?><rss version="2.0"><channel><title>${title}</title>${items.map((i) => `<item><title>${i.title}</title>${i.link ? `<link>${i.link}</link>` : ""}${i.date ? `<pubDate>${i.date}</pubDate>` : ""}<description><![CDATA[${i.desc ?? ""}]]></description></item>`).join("")}</channel></rss>`,
+	}) as FakeResponse;
+
+export const atom = (entries: { title: string; link: string; date?: string; summary?: string }[]) =>
+	({
+		type: "application/atom+xml",
+		body: `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Meridian</title>${entries.map((e) => `<entry><title>${e.title}</title><link rel="alternate" href="${e.link}"/>${e.date ? `<published>${e.date}</published>` : ""}<summary>${e.summary ?? ""}</summary></entry>`).join("")}</feed>`,
+	}) as FakeResponse;
+
+/**
+ * A firm that publishes a thesis, a portfolio, a newsroom and an RSS feed. All dates are relative to the
+ * test clock 2026-10-11, so "recent", "historical" and "out of window" are unambiguous.
+ */
+export function meridianSite(): Record<string, FakeResponse | string> {
+	return {
+		"/robots.txt": { status: 404 },
+		"/": html(
+			"Meridian Ventures",
+			`<nav><a href="/thesis">Thesis</a> <a href="/portfolio">Portfolio</a> <a href="/news">News</a></nav><h1>Meridian Ventures</h1><p>${"Meridian Ventures backs founders building the next generation of financial infrastructure. ".repeat(4)}</p><footer>© 2026 Meridian Ventures. All rights reserved.</footer>`,
+			'<link rel="alternate" type="application/rss+xml" href="/feed.xml">',
+		),
+		"/thesis": html("Investment thesis", "<p>We invest in seed stage fintech companies in Europe.</p><p>Our typical check size is $500K-$2M.</p>"),
+		"/portfolio": html("Portfolio", "<ul><li>Ledgerly — fintech payments for small business.</li><li>Payvale — fintech lending infrastructure.</li><li>Finbridge — fintech compliance software.</li></ul>"),
+		"/news": html("News", '<p>Latest from Meridian.</p><a href="/news/gridcell">Meridian leads Gridcell seed round</a>'),
+		"/news/gridcell": html("Meridian leads Gridcell's seed round", "<p>Meridian Ventures led the $4 million seed round of Gridcell, a climate storage company, announced on October 1, 2026.</p>", '<meta property="article:published_time" content="2026-10-01T08:00:00Z">'),
+		"/feed.xml": rss([
+			{ title: "Meridian leads $4M seed round in Gridcell", link: "https://meridian.vc/news/gridcell", date: "Thu, 01 Oct 2026 08:00:00 GMT", desc: "Meridian Ventures led the seed round of Gridcell, a climate storage company." },
+			{ title: "Meridian backs Oldco in Series A", link: "https://meridian.vc/news/oldco", date: "Wed, 15 Jan 2025 08:00:00 GMT", desc: "Meridian Ventures led the Series A of Oldco." },
+			{ title: "Meridian backs Ancientco in seed", link: "https://meridian.vc/news/ancientco", date: "Mon, 03 Jun 2019 08:00:00 GMT", desc: "Meridian Ventures led the seed round of Ancientco." },
+		]),
+	};
+}

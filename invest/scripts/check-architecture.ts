@@ -57,6 +57,20 @@ for (const file of productionServer) {
 	if (/\beval\s*\(|new Function\s*\(|isEvalSupported:\s*true/.test(src)) fail("no-dynamic-evaluation", file, "dynamic code evaluation");
 }
 
+// 0. feltdb.flow is the authoritative state declaration: importing the store compiles it and fails if
+//    it is invalid or disagrees with the collections the code names. Every collection must be workspace-scoped and indexed.
+{
+	const { FLOW } = await import("../store/store.ts");
+	for (const c of FLOW.collections) {
+		if (!c.fields.some((f) => f.name === "workspaceId" && !f.optional)) fail("flow-workspace-scoped", "feltdb.flow", `${c.name} has no workspaceId field`);
+		if (!c.indexes.some((i) => i.expression.replace(/[()\s]/g, "") === "workspaceId")) fail("flow-workspace-indexed", "feltdb.flow", `${c.name} has no workspaceId index`);
+	}
+	for (const file of productionServer) {
+		const src = await readFile(file, "utf8");
+		if (/\.createIndex\(/.test(src) && !relative(join(root, "invest"), file).startsWith("store/")) fail("indexes-only-from-flow", file, "creates an index outside the store");
+	}
+}
+
 // 5. No capability accepts a workspace or tenant id; every capability requires a permission.
 const manifest = JSON.parse(await readFile(join(root, "invest/appport/manifest.json"), "utf8")) as { capabilities: { name: string; authorization: string[]; inputSchema: unknown }[] };
 for (const c of manifest.capabilities.filter((c) => !c.name.startsWith("appport."))) {
