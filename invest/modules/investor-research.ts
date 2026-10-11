@@ -507,14 +507,14 @@ export class InvestorResearchModule {
 
 	// ------------------------------------------------------------------ review and approval
 
-	async review(actor: Actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; action: ReviewAction; note: string; correctedValue?: string }): Promise<ResearchReview> {
+	async review(actor: Actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; claimId?: string | null; action: ReviewAction; note: string; correctedValue?: string }): Promise<ResearchReview> {
 		const firm = await this.getFirm(actor, input.firmId);
 		if (!["flag", "dispute", "correct", "note", "confirm", "dismiss"].includes(input.action)) throw invalid("Unknown review action");
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
 		const correctedValue = input.correctedValue?.trim() || null;
 		if (input.action === "correct" && (!correctedValue || correctedValue.length > 200)) throw invalid("A correction needs the corrected value (≤200 characters)");
-		const subjects = [input.criterionId, input.eventId, input.findingId].filter(Boolean);
+		const subjects = [input.criterionId, input.eventId, input.findingId, input.claimId].filter(Boolean);
 		if (subjects.length > 1) throw invalid("A review concerns one criterion, event or finding");
 		if (input.criterionId) {
 			const criterion = await this.store.get<ResearchCriterion>(C.researchCriteria, input.criterionId, actor.workspaceId);
@@ -522,25 +522,37 @@ export class InvestorResearchModule {
 		} else if (input.eventId) {
 			const event = await this.store.get<InvestmentEvent>(C.investmentEvents, input.eventId, actor.workspaceId);
 			if (!event || event.firmId !== firm.id) throw notFound("Event");
+		} else if (input.claimId) {
+			const claim = await this.store.get<{ firmId: string }>(C.claims, input.claimId, actor.workspaceId);
+			if (!claim || claim.firmId !== firm.id) throw notFound("Claim");
 		} else if (input.findingId) {
 			const finding = await this.store.get<ResearchFinding>(C.researchFindings, input.findingId, actor.workspaceId);
 			if (!finding || finding.firmId !== firm.id) throw notFound("Finding");
 		} else if (input.action === "correct" || input.action === "confirm" || input.action === "dismiss") throw invalid(`${input.action} must name what it concerns`);
-		const record: ResearchReview = { id: newId("rev"), workspaceId: actor.workspaceId, firmId: firm.id, criterionId: input.criterionId ?? null, eventId: input.eventId ?? null, findingId: input.findingId ?? null, action: input.action, note, correctedValue: input.action === "correct" ? correctedValue : null, createdAt: this.store.now(), createdBy: actor.principalId };
+		const record: ResearchReview = { id: newId("rev"), workspaceId: actor.workspaceId, firmId: firm.id, criterionId: input.criterionId ?? null, eventId: input.eventId ?? null, findingId: input.findingId ?? null, claimId: input.claimId ?? null, action: input.action, note, correctedValue: input.action === "correct" ? correctedValue : null, createdAt: this.store.now(), createdBy: actor.principalId };
 		await this.store.commit(actor, {
 			writes: [{ collection: C.researchReviews, id: record.id, value: record as unknown as Record<string, unknown>, create: true }],
-			audit: [{ eventType: "research.review_recorded", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId: firm.id, criterionId: record.criterionId, eventId: record.eventId, findingId: record.findingId, action: record.action, reviewId: record.id } }],
+			audit: [{ eventType: "research.review_recorded", entityRef: { type: "investor_firm", id: firm.id }, payload: { firmId: firm.id, criterionId: record.criterionId, eventId: record.eventId, findingId: record.findingId, claimId: record.claimId ?? null, action: record.action, reviewId: record.id } }],
 		});
 		return record;
 	}
 
-	private async approvalsFor(actor: Actor, firmId: string): Promise<FirmApproval[]> {
+	async approvalsFor(actor: Actor, firmId: string): Promise<FirmApproval[]> {
 		return (await this.store.list<FirmApproval>(C.firmApprovals, actor.workspaceId, { firmId })).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 	}
 
 	/** An investor adopts a value as verified. Written only on an explicit human request; the research criterion it came from is untouched. */
 	async approve(actor: Actor, input: { firmId: string; criterionId?: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; note: string }): Promise<FirmApproval> {
 		if (!actor.permissions.includes("thesis.approve")) throw forbidden("Approving firm criteria needs the thesis.approve permission");
+		return this.approveWith(actor, input, { authority: "workspace", claimId: null });
+	}
+
+	/**
+	 * The approval itself. `authority` says who is speaking: this workspace, or a verified representative of
+	 * the firm (the caller, `ParticipationModule`, has already checked the verified claim). A third-party claim
+	 * can be adopted as the basis (`basisClaimId`): the claim is not changed, and the approval is a new record.
+	 */
+	async approveWith(actor: Actor, input: { firmId: string; criterionId?: string; basisClaimId?: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; note: string }, who: { authority: "workspace" | "firm_representative"; claimId: string | null }): Promise<FirmApproval> {
 		const firm = await this.getFirm(actor, input.firmId);
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
@@ -548,7 +560,15 @@ export class InvestorResearchModule {
 		let polarity: "include" | "exclude";
 		let value: string;
 		let valueRange: FirmApproval["valueRange"] = null;
-		if (input.criterionId) {
+		if (input.basisClaimId) {
+			const cl = await this.store.get<{ firmId: string; field: CriterionField; polarity: "include" | "exclude"; value: string; valueRange: FirmApproval["valueRange"]; assertionType: string }>(C.claims, input.basisClaimId, actor.workspaceId);
+			if (!cl || cl.firmId !== firm.id) throw notFound("Claim");
+			if (cl.assertionType === "inferred") throw invalid("An inferred claim is not a stated criterion");
+			field = cl.field;
+			polarity = cl.polarity;
+			value = cl.value;
+			valueRange = cl.valueRange;
+		} else if (input.criterionId) {
 			const c = await this.store.get<ResearchCriterion>(C.researchCriteria, input.criterionId, actor.workspaceId);
 			if (!c || c.firmId !== firm.id) throw notFound("Criterion");
 			if (c.assertionType === "inferred") throw invalid("A portfolio-derived pattern is not a stated criterion; enter the value yourself if you want to approve it");
@@ -581,21 +601,26 @@ export class InvestorResearchModule {
 		}
 		const approvals = await this.approvalsFor(actor, firm.id);
 		if (currentApprovals(approvals).some((a) => a.field === field && a.polarity === polarity && a.value === value)) throw precondition("This value is already approved");
-		const record: FirmApproval = { id: newId("fa"), workspaceId: actor.workspaceId, firmId: firm.id, kind: "approve", field, polarity, value, valueRange, basisCriterionId: input.criterionId ?? null, withdrawsId: null, note, createdAt: this.store.now(), createdBy: actor.principalId };
-		await this.commitApproval(actor, firm, record, approvals, "firm.criterion_approved");
+		const record: FirmApproval = { id: newId("fa"), workspaceId: actor.workspaceId, firmId: firm.id, kind: "approve", field, polarity, value, valueRange, basisCriterionId: input.criterionId ?? input.basisClaimId ?? null, withdrawsId: null, authority: who.authority, representativeClaimId: who.claimId, note, createdAt: this.store.now(), createdBy: actor.principalId };
+		await this.commitApproval(actor, firm, record, approvals, who.authority === "firm_representative" ? "profile.criterion_approved" : "firm.criterion_approved");
 		return record;
 	}
 
 	async withdraw(actor: Actor, input: { firmId: string; approvalId: string; note: string }): Promise<FirmApproval> {
 		if (!actor.permissions.includes("thesis.approve")) throw forbidden("Withdrawing approved criteria needs the thesis.approve permission");
+		return this.withdrawWith(actor, input, "workspace");
+	}
+
+	async withdrawWith(actor: Actor, input: { firmId: string; approvalId: string; note: string }, authority: "workspace" | "firm_representative"): Promise<FirmApproval> {
 		const firm = await this.getFirm(actor, input.firmId);
 		const note = input.note?.trim() ?? "";
 		if (!note || note.length > 2000) throw invalid("A note of 1–2000 characters is required");
 		const approvals = await this.approvalsFor(actor, firm.id);
 		const target = currentApprovals(approvals).find((a) => a.id === input.approvalId);
 		if (!target) throw notFound("Approval");
+		if ((target.authority ?? "workspace") !== authority) throw forbidden("This approval was made by a different authority and cannot be withdrawn from here");
 		const record: FirmApproval = { ...target, id: newId("fa"), kind: "withdraw", withdrawsId: target.id, note, createdAt: this.store.now(), createdBy: actor.principalId };
-		await this.commitApproval(actor, firm, record, approvals, "firm.criterion_withdrawn");
+		await this.commitApproval(actor, firm, record, approvals, authority === "firm_representative" ? "profile.criterion_withdrawn" : "firm.criterion_withdrawn");
 		return record;
 	}
 

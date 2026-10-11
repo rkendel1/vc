@@ -146,4 +146,96 @@ app AttnInvest {
     index workspaceId using hash(workspaceId)
     index firmId using hash(firmId)
   }
+  collection curated_sources {
+    workspaceId: text
+    index workspaceId using hash(workspaceId)
+  }
+  collection source_runs {
+    workspaceId: text
+    sourceId: text
+    index workspaceId using hash(workspaceId)
+    index sourceId using hash(sourceId)
+  }
+  collection source_snapshots {
+    workspaceId: text
+    sourceId: text
+    index workspaceId using hash(workspaceId)
+    index sourceId using hash(sourceId)
+  }
+  collection source_records {
+    workspaceId: text
+    sourceId: text
+    externalId: text
+    index workspaceId using hash(workspaceId)
+    index sourceId using hash(sourceId)
+    index externalId using hash(externalId)
+  }
+  collection entities {
+    workspaceId: text
+    key: text
+    domain: text
+    index workspaceId using hash(workspaceId)
+    index key using hash(key)
+    index domain using hash(domain)
+  }
+  collection entity_matches {
+    workspaceId: text
+    recordId: text
+    index workspaceId using hash(workspaceId)
+    index recordId using hash(recordId)
+  }
+  collection match_decisions {
+    workspaceId: text
+    matchId: text
+    recordId: text
+    index workspaceId using hash(workspaceId)
+    index matchId using hash(matchId)
+    index recordId using hash(recordId)
+  }
+  collection claims {
+    workspaceId: text
+    firmId: text
+    index workspaceId using hash(workspaceId)
+    index firmId using hash(firmId)
+  }
+  collection representative_claims {
+    workspaceId: text
+    canonicalDomain: text
+    principalId: text
+    index workspaceId using hash(workspaceId)
+    index canonicalDomain using hash(canonicalDomain)
+    index principalId using hash(principalId)
+  }
+  collection claim_events {
+    workspaceId: text
+    claimId: text
+    index workspaceId using hash(workspaceId)
+    index claimId using hash(claimId)
+  }
+  collection contributions {
+    workspaceId: text
+    chainId: text
+    firmDomain: text
+    index workspaceId using hash(workspaceId)
+    index chainId using hash(chainId)
+    index firmDomain using hash(firmDomain)
+  }
+  collection contribution_shares {
+    workspaceId: text
+    chainId: text
+    index workspaceId using hash(workspaceId)
+    index chainId using hash(chainId)
+  }
+  collection published_profiles {
+    workspaceId: text
+    canonicalDomain: text
+    index workspaceId using hash(workspaceId)
+    index canonicalDomain using hash(canonicalDomain)
+  }
+  collection contribution_responses {
+    workspaceId: text
+    chainId: text
+    index workspaceId using hash(workspaceId)
+    index chainId using hash(chainId)
+  }
 }

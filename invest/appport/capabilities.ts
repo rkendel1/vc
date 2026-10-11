@@ -1,5 +1,6 @@
 import { type CapabilityContext, defineCapability, errors, s } from "@appport/sdk";
 import { InvestError } from "../domain/errors.ts";
+import { ADAPTER_IDS, ACCESS_BASES, CONTRIBUTION_KINDS, type DatasetMapping, type ShareAudience } from "../domain/collab.ts";
 import { attentionFor } from "../modules/investor-research.ts";
 import { CRITERION_FIELDS, RESEARCH_STATUSES, type CriterionField, type ResearchStatus, type ReviewAction } from "../domain/research.ts";
 import { METRIC_KEYS, OUTCOMES, SOURCE_TYPES, type Actor, type InvestmentCriterion, type ThesisSettings } from "../domain/types.ts";
@@ -32,7 +33,8 @@ export function actorFrom(context: CapabilityContext): Actor {
 	const workspaceId = session?.attributes?.tenantId;
 	if (!session?.principal?.id || typeof workspaceId !== "string" || !workspaceId) throw errors.unauthorized("An authenticated workspace session is required");
 	const displayName = typeof session.attributes?.displayName === "string" ? session.attributes.displayName : session.principal.id;
-	return { principalId: session.principal.id, displayName, workspaceId, permissions: session.permissions ?? [] };
+	const role = typeof session.attributes?.role === "string" ? session.attributes.role : undefined;
+	return { principalId: session.principal.id, displayName, workspaceId, permissions: session.permissions ?? [], role };
 }
 
 function mapError(error: unknown): never {
@@ -609,10 +611,10 @@ export const firmReview = defineCapability({
 	version: 1,
 	description: "Flag, dispute, correct, annotate, confirm or dismiss a research criterion, an investment event or a finding. Recorded as a separate review; the research record is not changed and nothing is approved by it.",
 	authorization: ["review.write"],
-	input: s.object({ firmId: id(), criterionId: s.optional(s.nullable(id())), eventId: s.optional(s.nullable(id())), findingId: s.optional(s.nullable(id())), action: s.enum(["flag", "dispute", "correct", "note", "confirm", "dismiss"]), note: s.string(), correctedValue: s.optional(s.string()) }),
+	input: s.object({ firmId: id(), criterionId: s.optional(s.nullable(id())), eventId: s.optional(s.nullable(id())), findingId: s.optional(s.nullable(id())), claimId: s.optional(s.nullable(id())), action: s.enum(["flag", "dispute", "correct", "note", "confirm", "dismiss"]), note: s.string(), correctedValue: s.optional(s.string()) }),
 	output: out("review"),
 	attributes: contract("append-only"),
-	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; action: ReviewAction; note: string; correctedValue?: string }) => ({ review: await svc.research.review(actor, input) })),
+	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string | null; eventId?: string | null; findingId?: string | null; claimId?: string | null; action: ReviewAction; note: string; correctedValue?: string }) => ({ review: await svc.research.review(actor, input) })),
 });
 
 export const firmMonitoringSet = defineCapability({
@@ -682,6 +684,394 @@ export const firmApprovalWithdraw = defineCapability({
 	handler: run(async (svc, actor, input: { firmId: string; approvalId: string; note: string }) => ({ approval: await svc.research.withdraw(actor, input) })),
 });
 
+
+// ---------------------------------------------------------------------------
+// VC-4: curated sources, matches, reconciliation
+// ---------------------------------------------------------------------------
+
+const mappingSchema = s.object({
+	recordsPath: s.optional(s.string()),
+	idField: s.optional(s.string()),
+	nameField: s.string(),
+	websiteField: s.optional(s.string()),
+	stageField: s.optional(s.string()),
+	sectorsField: s.optional(s.string()),
+	geographyField: s.optional(s.string()),
+	checkMinField: s.optional(s.string()),
+	checkMaxField: s.optional(s.string()),
+	updatedField: s.optional(s.string()),
+	listDelimiter: s.optional(s.string()),
+	checkUnit: s.optional(s.enum(["usd", "thousands", "millions"])),
+	recordKind: s.optional(s.enum(["investor", "portfolio_company"])),
+	investorField: s.optional(s.string()),
+});
+const audienceSchema = s.object({ kind: s.enum(["firm", "moderator"]), domain: s.optional(s.string()) });
+const asAudience = (a: { kind: "firm" | "moderator"; domain?: string }): ShareAudience => (a.kind === "firm" ? { kind: "firm", domain: a.domain ?? "" } : { kind: "moderator" });
+
+export const sourceRegister = defineCapability({
+	name: "source.register",
+	version: 1,
+	description: "Registers a curated third-party source (directory, dataset, funding-news feed) for monitoring. The registrant attests why automated access is permitted and where the terms say so; fetching uses the safe-fetch boundary.",
+	authorization: ["source.manage"],
+	input: s.object({
+		name: s.string(),
+		canonicalUrl: s.string(),
+		publisher: s.string(),
+		sourceType: s.enum(["directory", "curated_list", "funding_news", "portfolio_aggregator", "dataset"]),
+		adapter: s.enum(ADAPTER_IDS),
+		accessBasis: s.enum(ACCESS_BASES),
+		termsNote: s.string(),
+		limitations: s.optional(s.string()),
+		extraHosts: s.optional(s.array(s.string(), { maxItems: 3 })),
+		mapping: s.optional(mappingSchema),
+		intervalMinutes: s.optional(s.integer()),
+	}),
+	output: out("source", "created"),
+	attributes: contract("idempotent: the same URL in the same workspace returns the existing source"),
+	handler: run(async (svc, actor, input: { name: string; canonicalUrl: string; publisher: string; sourceType: "directory" | "curated_list" | "funding_news" | "portfolio_aggregator" | "dataset"; adapter: (typeof ADAPTER_IDS)[number]; accessBasis: (typeof ACCESS_BASES)[number]; termsNote: string; limitations?: string; extraHosts?: string[]; mapping?: DatasetMapping; intervalMinutes?: number }) => svc.sources.register(actor, input)),
+});
+
+export const sourceUpdate = defineCapability({
+	name: "source.update",
+	version: 1,
+	description: "Updates a source's name, terms note, limitations or mapping. A changed mapping reprocesses the next retrieval.",
+	authorization: ["source.manage"],
+	input: s.object({ sourceId: id(), name: s.optional(s.string()), termsNote: s.optional(s.string()), limitations: s.optional(s.string()), mapping: s.optional(mappingSchema) }),
+	output: out("source"),
+	attributes: contract("version-fenced; unchanged input changes nothing"),
+	handler: run(async (svc, actor, input: { sourceId: string; name?: string; termsNote?: string; limitations?: string; mapping?: DatasetMapping }) => ({ source: await svc.sources.update(actor, input.sourceId, input) })),
+});
+
+export const sourceList = defineCapability({
+	name: "source.list",
+	version: 1,
+	description: "Curated sources with monitoring status, last attempt, last success and next check.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.sources.list(actor) })),
+});
+
+export const sourceGet = defineCapability({
+	name: "source.get",
+	version: 1,
+	description: "One source: terms and limitations, run history with per-record errors, snapshots, record counts and match tallies.",
+	authorization: ["invest.read"],
+	input: s.object({ sourceId: id() }),
+	output: out("detail"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { sourceId: string }) => ({ detail: await svc.sources.get(actor, input.sourceId) })),
+});
+
+export const sourceRecords = defineCapability({
+	name: "source.records",
+	version: 1,
+	description: "Normalised records a source produced, with their original identifiers, passages and parse notes.",
+	authorization: ["invest.read"],
+	input: s.object({ sourceId: id(), limit: s.optional(s.integer()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { sourceId: string; limit?: number }) => ({ items: await svc.sources.records(actor, input.sourceId, input.limit) })),
+});
+
+export const sourceRefresh = defineCapability({
+	name: "source.refresh",
+	version: 1,
+	description: "Retrieves one registered source now, in this process. Accepts a source id only, never a URL.",
+	authorization: ["source.manage"],
+	concurrency: { mode: "keyed", key: "sourceId" },
+	input: s.object({ sourceId: id() }),
+	output: out("run"),
+	attributes: contract("append-only: each call records a run; a run in progress is CONFLICT"),
+	handler: run(async (svc, actor, input: { sourceId: string }) => ({ run: await svc.sources.startRefresh(actor, input.sourceId) })),
+});
+
+export const sourceMonitoringSet = defineCapability({
+	name: "source.monitoring.set",
+	version: 1,
+	description: "Pauses or resumes monitoring of a source, or changes its interval. Pausing keeps its records, claims and history.",
+	authorization: ["source.manage"],
+	input: s.object({ sourceId: id(), enabled: s.optional(s.boolean()), intervalMinutes: s.optional(s.integer()) }),
+	output: out("target"),
+	attributes: contract("idempotent"),
+	handler: run(async (svc, actor, input: { sourceId: string; enabled?: boolean; intervalMinutes?: number }) => {
+		await svc.sources.get(actor, input.sourceId);
+		return { target: await svc.monitoring.configure(actor, input.sourceId, input) };
+	}),
+});
+
+export const matchDecide = defineCapability({
+	name: "match.decide",
+	version: 1,
+	description: "Confirms or rejects a candidate match between a source record and an existing entity, with a rationale. Rejections are remembered; nothing is merged or deleted.",
+	authorization: ["review.write"],
+	input: s.object({ matchId: id(), decision: s.enum(["confirm", "reject"]), entityType: s.enum(["firm", "entity"]), entityId: id(), rationale: s.string() }),
+	output: out("decision"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { matchId: string; decision: "confirm" | "reject"; entityType: "firm" | "entity"; entityId: string; rationale: string }) => ({ decision: await svc.sources.decideMatch(actor, { matchId: input.matchId, decision: input.decision, entity: { type: input.entityType, id: input.entityId }, rationale: input.rationale }) })),
+});
+
+export const matchList = defineCapability({
+	name: "match.list",
+	version: 1,
+	description: "Candidate matches awaiting a decision, and the history of decisions.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("open", "history"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ open: await svc.sources.openMatches(actor), history: await svc.sources.matchHistory(actor) })),
+});
+
+export const firmReconciliation = defineCapability({
+	name: "firm.reconciliation",
+	version: 1,
+	description: "Per-field reconciliation of the firm's own statements, third-party claims, the viewer's contributions and the firm's published profile: signals, reasons and conflicts, never a score.",
+	authorization: ["invest.read"],
+	input: s.object({ firmId: id() }),
+	output: out("reconciliation"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { firmId: string }) => ({ reconciliation: await svc.reconciliation.forFirm(actor, input.firmId) })),
+});
+
+export const inboxList = defineCapability({
+	name: "inbox.list",
+	version: 1,
+	description: "What needs the caller's decision: candidate matches, unresolved conflicts, proposed claims, shared contributions, representative claims (moderators) and disputed contributions (authors).",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.reconciliation.inbox(actor) })),
+});
+
+// ---------------------------------------------------------------------------
+// VC-4: participation
+// ---------------------------------------------------------------------------
+
+export const profileClaimRequest = defineCapability({
+	name: "profile.claim.request",
+	version: 1,
+	description: "Requests to represent a firm. Returns a challenge to publish at /.well-known/attn-invest-claim.txt. Signing up is not authority: a moderator must verify the claim.",
+	authorization: ["profile.claim"],
+	input: s.object({ domain: s.string(), firmName: s.string(), relationship: s.string() }),
+	output: out("claim", "status"),
+	attributes: contract("idempotent per principal and domain"),
+	handler: run(async (svc, actor, input: { domain: string; firmName: string; relationship: string }) => svc.participation.requestClaim(actor, input)),
+});
+
+export const profileClaimCheck = defineCapability({
+	name: "profile.claim.check",
+	version: 1,
+	description: "Checks the domain-control proof for the caller's own claim through the safe-fetch boundary. The result is evidence for the moderator, not authority.",
+	authorization: ["profile.claim"],
+	input: s.object({ claimId: id() }),
+	output: out("event"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { claimId: string }) => ({ event: await svc.participation.checkProof(actor, input.claimId) })),
+});
+
+export const profileClaimMine = defineCapability({
+	name: "profile.claim.mine",
+	version: 1,
+	description: "The caller's representative claims with their status and history.",
+	authorization: ["profile.claim"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.participation.myClaims(actor) })),
+});
+
+export const claimPending = defineCapability({
+	name: "claim.pending",
+	version: 1,
+	description: "Representative claims awaiting a moderator decision, across workspaces. Challenges are not included.",
+	authorization: ["moderation.review"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.participation.pendingClaims(actor) })),
+});
+
+export const claimReview = defineCapability({
+	name: "claim.review",
+	version: 1,
+	description: "A moderator verifies, rejects or revokes a representative claim, with a rationale and the evidence considered. Verification needs a successful domain proof or documented evidence.",
+	authorization: ["moderation.review"],
+	input: s.object({ claimId: id(), decision: s.enum(["verify", "reject", "revoke"]), rationale: s.string(), evidence: s.optional(s.array(s.string(), { maxItems: 10 })) }),
+	output: out("event"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { claimId: string; decision: "verify" | "reject" | "revoke"; rationale: string; evidence?: string[] }) => ({ event: await svc.participation.reviewClaim(actor, input) })),
+});
+
+export const profileApprove = defineCapability({
+	name: "profile.approve",
+	version: 1,
+	description: "A verified representative approves one of the firm's criteria as the firm itself, from a research criterion, a third-party claim, or entered by hand. Works only with a verified claim for the firm's domain.",
+	authorization: ["profile.publish"],
+	input: s.object({ firmId: id(), criterionId: s.optional(id()), claimId: s.optional(id()), field: s.optional(s.enum(CRITERION_FIELDS)), polarity: s.optional(s.enum(["include", "exclude"])), value: s.optional(s.string()), minUsd: s.optional(s.number()), maxUsd: s.optional(s.number()), note: s.string() }),
+	output: out("approval"),
+	attributes: contract("append-only; an existing active approval of the same value is CONFLICT"),
+	handler: run(async (svc, actor, input: { firmId: string; criterionId?: string; claimId?: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; note: string }) => ({ approval: await svc.participation.approve(actor, input) })),
+});
+
+export const profileApprovalWithdraw = defineCapability({
+	name: "profile.approval.withdraw",
+	version: 1,
+	description: "A verified representative withdraws one of their approvals by appending a withdrawal.",
+	authorization: ["profile.publish"],
+	input: s.object({ firmId: id(), approvalId: id(), note: s.string() }),
+	output: out("approval"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { firmId: string; approvalId: string; note: string }) => ({ approval: await svc.participation.withdrawApproval(actor, input) })),
+});
+
+export const profilePublish = defineCapability({
+	name: "profile.publish",
+	version: 1,
+	description: "Publishes exactly the chosen representative-approved criteria as a new version of the firm's public profile, readable by every workspace. Nothing is published unless chosen.",
+	authorization: ["profile.publish"],
+	input: s.object({ firmId: id(), approvalIds: s.array(id(), { maxItems: 50 }), note: s.optional(s.string()) }),
+	output: out("profile"),
+	attributes: contract("append-only: each call is a new version; a concurrent publish retries on the next version"),
+	handler: run(async (svc, actor, input: { firmId: string; approvalIds: string[]; note?: string }) => ({ profile: await svc.participation.publish(actor, input) })),
+});
+
+export const profileUnpublish = defineCapability({
+	name: "profile.unpublish",
+	version: 1,
+	description: "Withdraws the published profile by appending a withdrawal version. Earlier versions stay in the history.",
+	authorization: ["profile.publish"],
+	input: s.object({ firmId: id(), note: s.string() }),
+	output: out("profile"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { firmId: string; note: string }) => ({ profile: await svc.participation.unpublish(actor, input) })),
+});
+
+export const profileHistory = defineCapability({
+	name: "profile.history",
+	version: 1,
+	description: "Approvals, withdrawals, publications and claim decisions for a firm, newest first.",
+	authorization: ["invest.read"],
+	input: s.object({ firmId: id() }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { firmId: string }) => ({ items: await svc.participation.history(actor, input.firmId) })),
+});
+
+export const directoryList = defineCapability({
+	name: "directory.list",
+	version: 1,
+	description: "Firms that have published an investor-approved profile (current versions only). The one place a workspace reads another workspace's data, and only what a verified representative chose to publish.",
+	authorization: ["invest.read"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc) => ({ items: await svc.participation.directory() })),
+});
+
+export const directoryGet = defineCapability({
+	name: "directory.get",
+	version: 1,
+	description: "A firm's published profile for a domain, or null.",
+	authorization: ["invest.read"],
+	input: s.object({ domain: s.string() }),
+	output: out("profile"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, _actor, input: { domain: string }) => ({ profile: await svc.participation.publishedFor(input.domain.trim().toLowerCase().replace(/^www\./, "")) })),
+});
+
+const contributionInput = { kind: s.enum(CONTRIBUTION_KINDS), firmDomain: s.string(), field: s.optional(s.enum(CRITERION_FIELDS)), polarity: s.optional(s.enum(["include", "exclude"])), value: s.optional(s.string()), minUsd: s.optional(s.number()), maxUsd: s.optional(s.number()), text: s.string(), evidenceUrls: s.optional(s.array(s.string(), { maxItems: 5 })) };
+type ContribIn = { kind: (typeof CONTRIBUTION_KINDS)[number]; firmDomain: string; field?: CriterionField; polarity?: "include" | "exclude"; value?: string; minUsd?: number; maxUsd?: number; text: string; evidenceUrls?: string[] };
+
+export const contributionCreate = defineCapability({
+	name: "contribution.create",
+	version: 1,
+	description: "Records a private contribution about a firm: a correction, firsthand note, outdated-criterion flag, suggested relationship or interaction note. Private to the author's workspace until shared.",
+	authorization: ["contribution.write"],
+	input: s.object(contributionInput),
+	output: out("contribution"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: ContribIn) => ({ contribution: await svc.participation.contribute(actor, input) })),
+});
+
+export const contributionEdit = defineCapability({
+	name: "contribution.edit",
+	version: 1,
+	description: "Edits a contribution by creating a new version; earlier versions stay.",
+	authorization: ["contribution.write"],
+	input: s.object({ chainId: id(), ...contributionInput }),
+	output: out("contribution"),
+	attributes: contract("append-only versions"),
+	handler: run(async (svc, actor, input: ContribIn & { chainId: string }) => ({ contribution: await svc.participation.edit(actor, input.chainId, input) })),
+});
+
+export const contributionMine = defineCapability({
+	name: "contribution.mine",
+	version: 1,
+	description: "The caller's own contributions with sharing state, share history and the responses received.",
+	authorization: ["contribution.write"],
+	input: s.object({ firmDomain: s.optional(s.string()) }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { firmDomain?: string }) => ({ items: await svc.participation.mine(actor, input) })),
+});
+
+export const contributionShare = defineCapability({
+	name: "contribution.share",
+	version: 1,
+	description: "Shares a contribution with the firm it is about, or with moderators. Sharing is consent for that audience only; it is not publishing. Aggregate-analysis consent is a separate, explicit flag.",
+	authorization: ["contribution.share"],
+	input: s.object({ chainId: id(), audience: audienceSchema, aggregateConsent: s.optional(s.boolean()), note: s.optional(s.string()) }),
+	output: out("share"),
+	attributes: contract("append-only consent events"),
+	handler: run(async (svc, actor, input: { chainId: string; audience: { kind: "firm" | "moderator"; domain?: string }; aggregateConsent?: boolean; note?: string }) => ({ share: await svc.participation.share(actor, { ...input, audience: asAudience(input.audience) }) })),
+});
+
+export const contributionRevoke = defineCapability({
+	name: "contribution.revoke",
+	version: 1,
+	description: "Revokes sharing for one audience. The receiver can no longer read it; their earlier responses remain.",
+	authorization: ["contribution.share"],
+	input: s.object({ chainId: id(), audience: audienceSchema }),
+	output: out("share"),
+	attributes: contract("append-only consent events"),
+	handler: run(async (svc, actor, input: { chainId: string; audience: { kind: "firm" | "moderator"; domain?: string } }) => ({ share: await svc.participation.revoke(actor, { chainId: input.chainId, audience: asAudience(input.audience) }) })),
+});
+
+export const contributionSharedWithFirm = defineCapability({
+	name: "contribution.shared",
+	version: 1,
+	description: "Contributions authors shared with the firm. Only a verified representative of that firm can read them; authors are not identified.",
+	authorization: ["contribution.read_shared"],
+	input: s.object({ domain: s.string() }),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor, input: { domain: string }) => ({ items: await svc.participation.sharedWithFirm(actor, input.domain) })),
+});
+
+export const contributionModeratorQueue = defineCapability({
+	name: "contribution.queue",
+	version: 1,
+	description: "Contributions authors chose to share with moderators.",
+	authorization: ["moderation.review"],
+	input: s.object({}),
+	output: out("items"),
+	attributes: contract("read-only"),
+	handler: run(async (svc, actor) => ({ items: await svc.participation.moderatorQueue(actor) })),
+});
+
+export const contributionRespond = defineCapability({
+	name: "contribution.respond",
+	version: 1,
+	description: "A verified representative or moderator responds to a shared contribution. A dispute is recorded beside the contribution; it never edits or deletes it.",
+	authorization: ["invest.read"],
+	input: s.object({ chainId: id(), action: s.enum(["confirm", "dispute", "dismiss", "flag", "note"]), note: s.string(), as: s.enum(["firm_representative", "moderator"]) }),
+	output: out("response"),
+	attributes: contract("append-only"),
+	handler: run(async (svc, actor, input: { chainId: string; action: "confirm" | "dispute" | "dismiss" | "flag" | "note"; note: string; as: "firm_representative" | "moderator" }) => ({ response: await svc.participation.respond(actor, input) })),
+});
+
 function strip<T extends { requestKey?: string; manifest?: unknown }>(e: T) {
 	const { requestKey: _k, ...rest } = e;
 	return rest;
@@ -732,5 +1122,36 @@ export function investCapabilities(options: { maxUploadBytes: number }) {
 		attentionList,
 		firmApprove,
 		firmApprovalWithdraw,
+		sourceRegister,
+		sourceUpdate,
+		sourceList,
+		sourceGet,
+		sourceRecords,
+		sourceRefresh,
+		sourceMonitoringSet,
+		matchDecide,
+		matchList,
+		firmReconciliation,
+		inboxList,
+		profileClaimRequest,
+		profileClaimCheck,
+		profileClaimMine,
+		claimPending,
+		claimReview,
+		profileApprove,
+		profileApprovalWithdraw,
+		profilePublish,
+		profileUnpublish,
+		profileHistory,
+		directoryList,
+		directoryGet,
+		contributionCreate,
+		contributionEdit,
+		contributionMine,
+		contributionShare,
+		contributionRevoke,
+		contributionSharedWithFirm,
+		contributionModeratorQueue,
+		contributionRespond,
 	];
 }

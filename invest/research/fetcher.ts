@@ -19,11 +19,13 @@ export type FetchResult = {
 /** The crawler's only view of the network. Tests supply deterministic fixtures through `fetchImpl`. */
 export interface PageFetcher {
 	/** `feed: true` additionally accepts RSS/Atom/XML content types. Same destination, scope, robots and size rules. */
-	fetchPage(url: string, options?: { feed?: boolean }): Promise<FetchResult>;
+	fetchPage(url: string, options?: { feed?: boolean; data?: boolean }): Promise<FetchResult>;
 }
 
 export type SafeFetcherOptions = {
 	scopeDomain: string;
+	/** Additional hosts that are in scope (a curated source's explicitly registered download host). Each is validated like any other host. */
+	extraHosts?: string[];
 	limits: ResearchLimits;
 	userAgent: string;
 	/** Product token matched against robots.txt groups. */
@@ -37,6 +39,7 @@ export type SafeFetcherOptions = {
 };
 
 const TEXT_TYPES = /^(text\/html|application\/xhtml\+xml|text\/plain)\b/i;
+const DATA_TYPES = /^(text\/csv|application\/(?:json|csv|vnd\.ms-excel|octet-stream)|text\/plain|text\/json)\b/i;
 const FEED_TYPES = /^(application\/(?:rss|atom)\+xml|application\/xml|text\/xml|text\/plain|application\/rdf\+xml)\b/i;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -73,6 +76,10 @@ export class SafeHttpFetcher implements PageFetcher {
 		this.backoff = o.retryBackoffMs ?? 500;
 	}
 
+	private scoped(host: string): boolean {
+		return inScope(host, this.o.scopeDomain) || (this.o.extraHosts ?? []).some((h) => inScope(host, h));
+	}
+
 	private async pace(host: string, extraDelayMs: number | null) {
 		const gap = Math.max(this.o.limits.perDomainDelayMs, extraDelayMs ?? 0);
 		const at = this.nextSlot.get(host) ?? 0;
@@ -100,14 +107,14 @@ export class SafeHttpFetcher implements PageFetcher {
 		return DISALLOW_ALL_UNAVAILABLE; // 5xx, timeout, network failure, policy refusal: do not guess
 	}
 
-	async fetchPage(raw: string, options: { feed?: boolean } = {}): Promise<FetchResult> {
+	async fetchPage(raw: string, options: { feed?: boolean; data?: boolean } = {}): Promise<FetchResult> {
 		let url: URL;
 		try {
 			url = new URL(raw);
 		} catch {
 			return this.fail(raw, raw, "network_error", "not a URL");
 		}
-		if (!inScope(url.hostname, this.o.scopeDomain)) return this.fail(raw, raw, "redirect_off_domain", "outside the firm's domain");
+		if (!this.scoped(url.hostname)) return this.fail(raw, raw, "redirect_off_domain", "outside the firm's domain");
 		try {
 			await assertPublicDestination(url, { allowedPorts: this.ports, resolve: this.resolve });
 		} catch (error) {
@@ -117,7 +124,7 @@ export class SafeHttpFetcher implements PageFetcher {
 		if (!robotsAllows(rules, url.pathname + url.search)) {
 			return this.fail(raw, raw, "blocked_robots", rules.unavailable ? "robots.txt could not be retrieved, so the site was not crawled" : "disallowed by robots.txt");
 		}
-		return this.request(raw, { delayMs: rules.crawlDelayMs, feed: options.feed });
+		return this.request(raw, { delayMs: rules.crawlDelayMs, feed: options.feed, data: options.data });
 	}
 
 	private fail(requested: string, finalUrl: string, outcome: FetchOutcome, detail: string, extra: Partial<FetchResult> = {}): FetchResult {
@@ -130,7 +137,7 @@ export class SafeHttpFetcher implements PageFetcher {
 	}
 
 	/** One logical request with redirects and retries. */
-	private async request(raw: string, opts: { robots?: boolean; delayMs?: number | null; feed?: boolean }): Promise<FetchResult> {
+	private async request(raw: string, opts: { robots?: boolean; delayMs?: number | null; feed?: boolean; data?: boolean }): Promise<FetchResult> {
 		let last: FetchResult | null = null;
 		const attempts = this.o.limits.retries + 1;
 		for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -144,7 +151,7 @@ export class SafeHttpFetcher implements PageFetcher {
 		return last!;
 	}
 
-	private async once(raw: string, opts: { robots?: boolean; delayMs?: number | null; feed?: boolean }): Promise<FetchResult> {
+	private async once(raw: string, opts: { robots?: boolean; delayMs?: number | null; feed?: boolean; data?: boolean }): Promise<FetchResult> {
 		let current = raw;
 		const { limits } = this.o;
 		for (let hop = 0; hop <= limits.maxRedirects; hop++) {
@@ -154,7 +161,7 @@ export class SafeHttpFetcher implements PageFetcher {
 			} catch {
 				return this.fail(raw, current, "network_error", "bad redirect target");
 			}
-			if (!inScope(url.hostname, this.o.scopeDomain)) return this.fail(raw, current, "redirect_off_domain", `redirected to ${url.hostname}, outside the firm's domain; not followed`);
+			if (!this.scoped(url.hostname)) return this.fail(raw, current, "redirect_off_domain", `redirected to ${url.hostname}, outside the firm's domain; not followed`);
 			try {
 				await assertPublicDestination(url, { allowedPorts: this.ports, resolve: this.resolve });
 			} catch (error) {
@@ -173,7 +180,7 @@ export class SafeHttpFetcher implements PageFetcher {
 					redirect: "manual",
 					signal: timeout,
 					credentials: "omit",
-					headers: { "user-agent": this.o.userAgent, accept: opts.robots ? "text/plain" : opts.feed ? "application/rss+xml,application/atom+xml,application/xml;q=0.9,text/xml;q=0.8" : "text/html,application/xhtml+xml,text/plain;q=0.8", "accept-language": "en", "accept-encoding": "identity" },
+					headers: { "user-agent": this.o.userAgent, accept: opts.robots ? "text/plain" : opts.data ? "text/csv,application/json;q=0.9,text/plain;q=0.8" : opts.feed ? "application/rss+xml,application/atom+xml,application/xml;q=0.9,text/xml;q=0.8" : "text/html,application/xhtml+xml,text/plain;q=0.8", "accept-language": "en", "accept-encoding": "identity" },
 				});
 			} catch (error) {
 				if (timeout.aborted) return this.fail(raw, current, "timeout", `no answer within ${limits.timeoutMs}ms`);
@@ -198,7 +205,7 @@ export class SafeHttpFetcher implements PageFetcher {
 				return this.fail(raw, finalUrl, "http_error", `HTTP ${res.status}`, { httpStatus: res.status });
 			}
 			const contentType = res.headers.get("content-type");
-			if (!opts.robots && (!contentType || !(opts.feed ? FEED_TYPES : TEXT_TYPES).test(contentType))) {
+			if (!opts.robots && (!contentType || !(opts.data ? DATA_TYPES : opts.feed ? FEED_TYPES : TEXT_TYPES).test(contentType))) {
 				await res.body?.cancel().catch(() => undefined);
 				return this.fail(raw, finalUrl, "unsupported_content", `content type ${contentType ?? "absent"} is not readable text`, { httpStatus: res.status, contentType });
 			}

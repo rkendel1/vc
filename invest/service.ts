@@ -10,6 +10,9 @@ import { DocumentIngestionModule, type IngestionLimits } from "./modules/documen
 import { EvaluationOrchestrator, type OrchestratorOptions } from "./modules/evaluation-orchestrator.ts";
 import { EvidenceRegistryModule } from "./modules/evidence-registry.ts";
 import { InvestorResearchModule, type ResearchDeps } from "./modules/investor-research.ts";
+import { ParticipationModule } from "./modules/participation.ts";
+import { ReconciliationModule } from "./modules/reconciliation.ts";
+import { SourceIngestionModule, type IngestionDeps } from "./modules/source-ingestion.ts";
 import { MonitoringModule, type MonitoringOptions } from "./modules/monitoring.ts";
 import { InvestmentThesisModule } from "./modules/investment-thesis.ts";
 import { StartupRegistryModule } from "./modules/startup-registry.ts";
@@ -24,6 +27,7 @@ export type ServiceDeps = {
 	logger: Logger;
 	research: Omit<ResearchDeps, "store" | "jev">;
 	monitoring: MonitoringOptions;
+	ingestion: Omit<IngestionDeps, "store">;
 };
 
 
@@ -38,6 +42,9 @@ export class InvestmentService {
 	readonly audit: AuditModule;
 	readonly research: InvestorResearchModule;
 	readonly monitoring: MonitoringModule;
+	readonly sources: SourceIngestionModule;
+	readonly participation: ParticipationModule;
+	readonly reconciliation: ReconciliationModule;
 
 	constructor(private readonly deps: ServiceDeps) {
 		this.theses = new InvestmentThesisModule(deps.store);
@@ -49,6 +56,10 @@ export class InvestmentService {
 		this.audit = new AuditModule(deps.store);
 		this.research = new InvestorResearchModule({ ...deps.research, store: deps.store, jev: deps.jev });
 		this.monitoring = new MonitoringModule(deps.store, this.research, deps.monitoring);
+		this.sources = new SourceIngestionModule({ ...deps.ingestion, store: deps.store });
+		this.monitoring.setIngestion(this.sources);
+		this.participation = new ParticipationModule({ store: deps.store, research: this.research, fetcherFor: deps.research.fetcherFor, limits: deps.research.defaults });
+		this.reconciliation = new ReconciliationModule({ store: deps.store, research: this.research, participation: this.participation, sources: this.sources, staleAfterDays: deps.research.staleAfterDays });
 	}
 
 	get jevIdentity() {

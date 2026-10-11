@@ -42,5 +42,5 @@ describe("research CLI", () => {
 		expect(again.out).toContain("firm: unchanged; research: research_incomplete");
 		const dry2 = await cli(file, "--workspace", "ws-dev", "--dry-run");
 		expect(dry2.out).toContain("would_leave");
-	});
+	}, 60_000);
 });

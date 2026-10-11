@@ -170,6 +170,9 @@ export type ResearchReview = {
 	criterionId: string | null;
 	eventId: string | null;
 	findingId: string | null;
+	/** VC-4 subjects: a reconciled third-party claim, a source record, or a contribution. Absent on older records. */
+	claimId?: string | null;
+	contributionId?: string | null;
 	action: ReviewAction;
 	note: string;
 	correctedValue: string | null;
@@ -191,6 +194,9 @@ export type FirmApproval = {
 	basisCriterionId: string | null;
 	/** For withdraw: the approval it withdraws. */
 	withdrawsId: string | null;
+	/** workspace (default, VC-2): adopted by this workspace. firm_representative (VC-4): approved by a verified representative of the firm itself. */
+	authority?: "workspace" | "firm_representative";
+	representativeClaimId?: string | null;
 	note: string;
 	createdAt: string;
 	createdBy: string;
@@ -206,6 +212,10 @@ export type InvestorFirm = {
 	website: string;
 	aliasUrls: string[];
 	sourceNotes: string[];
+	/** Other names this firm is known by, from reviewer-confirmed matches. Absent on older records. */
+	aliases?: string[];
+	/** Identifiers the firm has in curated sources (VC-4). */
+	externalIds?: { sourceId: string; id: string }[];
 	researchStatus: ResearchStatus;
 	lastRunId: string | null;
 	lastRunStartedAt: string | null;
@@ -281,8 +291,10 @@ export const RESEARCH_DISCLAIMER =
 // --------------------------------------------------------------------------- monitoring (VC-3)
 
 export type MonitoringTarget = {
-	/** Equal to the firm id: one target per firm. */
+	/** Equal to the firm id (kind "firm") or the curated source id (kind "source"): one target per subject. */
 	id: string;
+	/** Absent on VC-3 records, meaning "firm". For a source target, `firmId` holds the source id and `canonicalDomain` its host. */
+	kind?: "firm" | "source";
 	workspaceId: string;
 	firmId: string;
 	canonicalDomain: string;
@@ -386,6 +398,9 @@ export type EventEvidence = {
 	firmAmountUsd: number | null;
 	runId: string;
 	discoveredAt: string;
+	/** VC-4: where this evidence came from. Absent means the firm's own crawl. */
+	category?: "official_public_source" | "third_party_source";
+	publisher?: string;
 };
 
 export type InvestmentEventView = InvestmentEvent & {

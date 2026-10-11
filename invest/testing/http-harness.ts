@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient, createHttpTransport } from "@appport/sdk";
-import { type InvestRuntime, type ResearchFetcherFactory, bootstrap } from "../bootstrap.ts";
+import { type InvestRuntime, type ResearchFetcherFactory, type SourceFetcherFactory, bootstrap } from "../bootstrap.ts";
 import { loadConfig } from "../config.ts";
 import { sha256Hex } from "../domain/canonical.ts";
 import { createInvestHttpServer } from "../http.ts";
@@ -24,7 +24,7 @@ export type HttpHarness = {
 	close(): Promise<void>;
 };
 
-export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: number; webDist?: string; fetcherFor?: ResearchFetcherFactory } = {}): Promise<HttpHarness> {
+export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: number; webDist?: string; fetcherFor?: ResearchFetcherFactory; fetcherForSource?: SourceFetcherFactory } = {}): Promise<HttpHarness> {
 	const dir = await mkdtemp(join(tmpdir(), "invest-http-"));
 	const registryPath = join(dir, "auth.json");
 	await writeFile(
@@ -53,7 +53,7 @@ export async function startHttpHarness(options: { jev?: JevDecider; maxBytes?: n
 		EVALUATION_MAX_RETRIES: "1",
 		JEV_TIMEOUT_MS: "5000",
 	});
-	const runtime = await bootstrap(config, silentLogger, { jev: options.jev, fetcherFor: options.fetcherFor });
+	const runtime = await bootstrap(config, silentLogger, { jev: options.jev, fetcherFor: options.fetcherFor, fetcherForSource: options.fetcherForSource });
 	const server = createInvestHttpServer(runtime, { webDist: options.webDist ?? join(dir, "no-web"), logger: silentLogger });
 	await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 	const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
