@@ -46,6 +46,7 @@ const errors: string[] = [];
 try {
 	const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 	page.on("pageerror", (e) => errors.push(String(e)));
+	if (process.env.E2E_DEBUG) page.on("response", (r) => r.status() === 409 && console.log("409:", r.request().postData()?.slice(0, 300)));
 	page.on("console", (m) => m.type() === "error" && !/\b(401|403)\b/.test(m.text()) && errors.push(m.text()));
 	const snap = async (name: string) => shots && (await page.screenshot({ path: join(shots, `${name}.png`), fullPage: true }));
 
@@ -325,6 +326,114 @@ try {
 	await page.click("role=tab[name='Contributions']");
 	await page.waitForSelector("text=Your contribution and evidence are kept.");
 	check(await page.isVisible("[data-testid=my-contribution] >> text=Not corroborated by a second source."), "a dispute is shown with its reason; the contribution stays");
+
+	console.log("founder matching: profile, evidence, candidates, explanation, shortlist, re-evaluation");
+	await page.evaluate(() => { window.location.hash = "#/"; });
+	await page.click("nav >> text=Founder");
+	await page.waitForSelector("text=Your startups");
+	await page.waitForSelector("text=No startup yet");
+	check(true, "a new founder workspace starts empty, with nothing invented");
+	await page.fill("label:has-text('Company name') input", "Acme Pay");
+	await page.click("button:has-text('Create startup')");
+	await page.waitForSelector("h1:has-text('Acme Pay')");
+	// before a profile exists the candidate view refuses to guess
+	await page.click("role=tab[name='Investors']");
+	check(await page.isVisible("text=Save a startup profile first"), "candidates need a saved profile first");
+	await page.click("role=tab[name='Profile']");
+	await page.selectOption("select[aria-label='Sector status']", "provided");
+	await page.check("[data-field=sectors] label:has-text('fintech') input");
+	await page.selectOption("select[aria-label='Current stage status']", "provided");
+	await page.selectOption("select[aria-label='Current stage']", "seed");
+	await page.selectOption("select[aria-label='Round you are raising status']", "provided");
+	await page.selectOption("select[aria-label='Round you are raising']", "seed");
+	await page.selectOption("select[aria-label='Target raise (USD) status']", "provided");
+	await page.fill("[data-field=targetRaise] input >> nth=0", "1000000");
+	await page.fill("[data-field=targetRaise] input >> nth=1", "1500000");
+	check(await page.isVisible("[data-field=targetRaise] >> text=$1M–$1.5M"), "a raise range is shown as formatted currency");
+	await page.selectOption("select[aria-label='Annual recurring revenue (USD) status']", "provided");
+	await page.fill("input[aria-label='Annual recurring revenue']", "2400000");
+	check(await page.isVisible("[data-field=revenueStatus] >> text=Left unknown"), "fields left unknown are labelled as missing, not as failures");
+	await page.click("button:has-text('Save profile')");
+	await page.waitForSelector("text=Saved as version 1.");
+	check(true, "the profile is saved as version 1");
+	// evidence reuses the existing document pipeline
+	await page.click("role=tab[name='Evidence']");
+	await page.click("a:has-text('Upload documents or review extracted evidence')");
+	await page.waitForSelector("input[type=file]");
+	await page.setInputFiles("input[type=file]", join(files, "northwind-deck.pdf"));
+	await page.click("button:has-text('Upload')");
+	await page.waitForSelector("text=claim(s) extracted");
+	await page.goBack();
+	await page.waitForSelector("h1:has-text('Acme Pay')");
+	await page.click("role=tab[name='Evidence']");
+	await page.waitForSelector("[data-testid=evidence-list]");
+	check(await page.isVisible("[data-testid=evidence-list] >> text=Founder-reported"), "uploaded evidence is labelled founder-supplied, not as proof");
+	// candidates
+	await page.click("role=tab[name='Investors']");
+	await page.waitForSelector("[data-investor='alpine.vc']");
+	const card = "[data-investor='alpine.vc']";
+	check(await page.isVisible(`${card} >> text=profile version 1`) && (await page.isVisible(`${card} >> text=From this workspace's research`)), "the candidate cites its source and the investor profile version it was compared with");
+	check(await page.isVisible(`${card} [data-dim=mandate] >> text=Compatible on what is known`), "mandate fit is stated only for the criteria that could be checked");
+	check(await page.isVisible(`${card} [data-dim=readiness]`) && (await page.isVisible(`${card} [data-dim=quality]`)) && (await page.isVisible(`${card} [data-dim=coverage]`)), "fit, readiness, evidence quality and coverage are separate");
+	// filters over sourced criteria
+	await page.click("[data-testid=filters] summary:has-text('Stage')");
+	await page.check("[data-testid=filters] label:has-text('series b') input");
+	await page.waitForSelector("text=No investor matches these filters");
+	check(true, "a stage filter removes an investor whose stated stages do not include it, and says so");
+	await page.click("button:has-text('Clear filters')");
+	await page.waitForSelector(card);
+	// explanation
+	await page.click(`${card} button:has-text('Explain')`);
+	await page.click("button:has-text('Evaluate and explain')");
+	await page.waitForSelector("[data-testid=mandate-table]");
+	check(await page.isVisible("[data-testid=mandate-table] tr[data-field=check_size] >> text=Compatible"), "the check-size criterion is compatible");
+	check(await page.isVisible("[data-testid=mandate-table] tr[data-field=check_size] >> text=Published by a verified representative"), "the criterion's source passage is shown");
+	check(await page.isVisible("[data-testid=mandate-table] tr[data-field=business_model] >> text=Unknown"), "a criterion the startup has not stated is unknown, not a failure");
+	check(await page.isVisible("[data-testid=mandate-table] tr[data-field=stage] >> text=Stated on the firm's own site"), "a criterion from the firm's own site is labelled as stated, not approved");
+	check(await page.isVisible("[data-testid=readiness] >> text=generic checklist, not this investor's requirement"), "generic readiness items are labelled as such");
+	check(await page.isVisible("[data-testid=quality] >> text=Annual recurring revenue"), "the profile's claims are assessed for evidence quality");
+	await page.click("summary:has-text('Provenance')");
+	check(await page.isVisible("[data-testid=provenance] >> text=Startup profile version 1") && (await page.isVisible("[data-testid=provenance] >> text=No AI model was used")), "the evaluation records the versions it used");
+	await snap("e2e-fit-explanation");
+	// shortlist and plan
+	await page.click(`${card} button:has-text('Save to shortlist')`);
+	await page.waitForSelector(`${card} >> text=On your shortlist`);
+	await page.click("role=tab[name='Shortlist & plan']");
+	await page.waitForSelector("[data-testid=shortlist]");
+	check(await page.isVisible("[data-testid=plan]") && (await page.isVisible("text=not a promise that completing them leads to investment")), "next steps are recommendations, each with its reason");
+	check(await page.isVisible("[data-testid=plan] >> text=Why:"), "each next step explains the finding behind it");
+	await page.fill("[data-testid=shortlist] label:has-text('Private note') input", "Intro via a friend");
+	await page.click("[data-testid=shortlist] button:has-text('Save note')");
+	await page.selectOption("[data-testid=shortlist] select", "ready");
+	await snap("e2e-shortlist");
+	// a material change makes the saved evaluation stale; re-running shows what changed
+	await page.click("role=tab[name='Profile']");
+	await page.fill("[data-field=targetRaise] input >> nth=0", "100000");
+	await page.fill("[data-field=targetRaise] input >> nth=1", "200000");
+	await page.click("button:has-text('Save profile')");
+	await page.waitForSelector("text=Saved as version 2.");
+	await page.click("role=tab[name='Shortlist & plan']");
+	await page.waitForSelector("[data-testid=stale]");
+	check(await page.isVisible("[data-testid=stale] >> text=startup profile changed"), "the shortlist says the evaluation no longer matches the profile");
+	await page.click("[data-testid=shortlist] button:has-text('Explain')");
+	await page.click("button:has-text('Evaluate and explain')");
+	await page.waitForSelector("[data-testid=changes]");
+	check(await page.isVisible("[data-testid=changes] >> text=version 1 → 2"), "re-running names what changed");
+	check(await page.isVisible("[data-testid=mandate-table] tr[data-field=check_size] >> text=Incompatible (authoritative)"), "the new result reflects the changed raise");
+	check(await page.isVisible("[data-testid=mandate-table] tr[data-field=check_size] >> text=larger than the whole"), "the eliminating constraint is explained");
+	await page.click("summary:has-text('Evaluation history')");
+	await page.click("button:has-text('Compare with #1')");
+	await page.waitForSelector("[data-testid=comparison]");
+	check(await page.isVisible("[data-testid=comparison] >> text=check size: compatible → incompatible"), "two evaluations can be compared; the first is unchanged");
+	await snap("e2e-fit-compare");
+	// a second founder sees none of it
+	await signIn(TOKENS.f2Founder, "text=Second founder workspace");
+	await page.click("nav >> text=Founder");
+	await page.waitForSelector("text=Your startups");
+	await page.waitForSelector("text=No startup yet");
+	check(!(await page.isVisible("text=Acme Pay")), "another founder workspace cannot see the startup, profile or shortlist");
+	await page.evaluate(() => { window.location.hash = "#/"; });
+	await signIn(TOKENS.fFounder, "text=Founder workspace");
 
 	console.log("isolation in the browser");
 	await page.click("text=Sign out");

@@ -905,3 +905,160 @@ label.check {
 .recon-conflicted {
 	border-left: 3px solid var(--o-contradicted);
 }
+
+/* ---------- founder matching ---------- */
+.row.between {
+	justify-content: space-between;
+	align-items: flex-start;
+}
+ul.plain,
+ol.plain {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.field.inline {
+	flex-direction: column;
+	gap: 2px;
+	font-size: 13px;
+}
+button.link {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--action);
+	text-decoration: underline;
+	cursor: pointer;
+}
+.checks {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+	gap: var(--s1) var(--s3);
+	font-size: 13px;
+}
+.known-field {
+	border-top: 1px solid var(--rule-soft);
+	padding: var(--s3) 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--s2);
+}
+.prov-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--s3);
+	align-items: flex-end;
+	font-size: 13px;
+}
+.filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--s3);
+	align-items: flex-end;
+	padding: var(--s3);
+	border: 1px solid var(--rule);
+	margin-bottom: var(--s4);
+}
+.filter {
+	min-width: 140px;
+}
+.filter .checks {
+	position: absolute;
+	z-index: 2;
+	background: var(--sheet);
+	border: 1px solid var(--rule);
+	padding: var(--s3);
+	max-width: 520px;
+}
+.candidate {
+	border: 1px solid var(--rule);
+	padding: var(--s4);
+	margin-bottom: var(--s4);
+	background: var(--sheet);
+}
+.dims {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+	gap: var(--s3);
+	margin: var(--s3) 0;
+}
+.dim {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s1);
+	border-left: 3px solid var(--rule);
+	padding-left: var(--s3);
+}
+.dim-title {
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+}
+.fit-chip {
+	display: inline-block;
+	border: 1px solid var(--rule);
+	padding: 1px 8px;
+	font-size: 12px;
+	border-radius: 2px;
+	align-self: flex-start;
+}
+.fit-chip.mandate-compatible_on_known,
+.fit-chip.status-compatible,
+.fit-chip.ready-met,
+.fit-chip.q-reviewer_verified,
+.fit-chip.q-corroborated,
+.fit-chip.cov-verified,
+.fit-chip.ok {
+	border-color: var(--o-supported);
+}
+.fit-chip.mandate-eliminated,
+.fit-chip.status-incompatible,
+.fit-chip.ready-not_met,
+.fit-chip.q-conflicting {
+	border-color: var(--o-contradicted);
+	font-weight: 600;
+}
+.fit-chip.mandate-possible_mismatch,
+.fit-chip.mandate-partially_assessed,
+.fit-chip.ready-evidence_not_provided,
+.fit-chip.q-founder_assertion,
+.fit-chip.q-supplied_by_founder,
+.fit-chip.q-source_cited,
+.fit-chip.cov-partially_verified,
+.fit-chip.cov-unverified_reports,
+.fit-chip.flag {
+	border-color: var(--o-partial);
+}
+.fit-chip.mandate-unknown,
+.fit-chip.status-unknown,
+.fit-chip.cov-unknown,
+.fit-chip.cov-inferred,
+.fit-chip.ready-not_applicable,
+.fit-chip.ready-not_assessable {
+	border-color: var(--o-na);
+	border-style: dashed;
+}
+.explanation {
+	margin-top: var(--s4);
+	padding-top: var(--s3);
+	border-top: 1px dashed var(--rule);
+}
+.explanation h4 {
+	margin: var(--s4) 0 var(--s2);
+}
+.source-block blockquote {
+	margin: var(--s2) 0;
+	padding: var(--s2) var(--s3);
+	border-left: 3px solid var(--action);
+	background: var(--ground);
+	font-size: 13px;
+}
+li.done {
+	opacity: 0.6;
+}
+@media (max-width: 640px) {
+	.candidate {
+		padding: var(--s3);
+	}
+}

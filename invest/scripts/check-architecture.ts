@@ -85,9 +85,9 @@ for (const file of web) {
 	const src = await readFile(file, "utf8");
 	for (const spec of imports(src)) {
 		if (!spec.includes("invest/")) continue;
-		const allowed = spec.endsWith("invest/appport/generated/client.ts") || spec.endsWith("invest/domain/types.ts") || spec.endsWith("invest/domain/views.ts") || spec.endsWith("invest/domain/research.ts") || spec.endsWith("invest/domain/collab.ts");
+		const allowed = spec.endsWith("invest/appport/generated/client.ts") || spec.endsWith("invest/domain/types.ts") || spec.endsWith("invest/domain/views.ts") || spec.endsWith("invest/domain/research.ts") || spec.endsWith("invest/domain/collab.ts") || spec.endsWith("invest/domain/founder.ts");
 		if (!allowed) fail("web-imports-only-contract", file, spec);
-		if (spec.endsWith("domain/types.ts") || spec.endsWith("domain/views.ts") || spec.endsWith("domain/research.ts") || spec.endsWith("domain/collab.ts")) {
+		if (spec.endsWith("domain/types.ts") || spec.endsWith("domain/views.ts") || spec.endsWith("domain/research.ts") || spec.endsWith("domain/collab.ts") || spec.endsWith("domain/founder.ts")) {
 			const line = src.split("\n").find((l) => l.includes(spec)) ?? "";
 			if (!/import\s+(type\s|\{\s*(METRIC_KEYS|SOURCE_TYPES|type\s))/.test(line) && !/^import \{[^}]*\} from/.test(line)) fail("web-imports-only-contract", file, `value import from ${spec}`);
 		}

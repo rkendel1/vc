@@ -3911,6 +3911,596 @@
       ]
     },
     {
+      "name": "fit.compare",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "What differs between two evaluations of the same startup and investor: inputs, then results.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "fromId": {
+            "type": "string"
+          },
+          "toId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "fromId",
+          "toId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {},
+          "to": {},
+          "inputs": {},
+          "results": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "inputs",
+          "results"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "What differs between two evaluations of the same startup and investor: inputs, then results.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "fromId": {
+                "type": "string"
+              },
+              "toId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "fromId",
+              "toId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "from": {},
+              "to": {},
+              "inputs": {},
+              "results": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "inputs",
+              "results"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fit.discover",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Candidate investors for a startup, each with mandate fit, readiness, evidence quality and research coverage kept separate. Computed on demand from the current profile; nothing is stored.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "stage": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12
+              },
+              "sector": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12
+              },
+              "geography": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12
+              },
+              "businessModel": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12
+              },
+              "checkSize": {
+                "type": "object",
+                "properties": {
+                  "minUsd": {
+                    "type": "number"
+                  },
+                  "maxUsd": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "approvedOnly": {
+                "type": "boolean"
+              },
+              "freshOnly": {
+                "type": "boolean"
+              },
+              "coverage": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5
+              },
+              "mandate": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5
+              },
+              "unknown": {
+                "type": "boolean"
+              },
+              "includeFounderExcluded": {
+                "type": "boolean"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "candidates": {},
+          "total": {},
+          "shown": {},
+          "empty": {},
+          "profileVersion": {},
+          "policyVersion": {},
+          "evaluatedAt": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "candidates",
+          "total",
+          "shown",
+          "empty",
+          "profileVersion",
+          "policyVersion",
+          "evaluatedAt"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Candidate investors for a startup, each with mandate fit, readiness, evidence quality and research coverage kept separate. Computed on demand from the current profile; nothing is stored.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "filters": {
+                "type": "object",
+                "properties": {
+                  "stage": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 12
+                  },
+                  "sector": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 12
+                  },
+                  "geography": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 12
+                  },
+                  "businessModel": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 12
+                  },
+                  "checkSize": {
+                    "type": "object",
+                    "properties": {
+                      "minUsd": {
+                        "type": "number"
+                      },
+                      "maxUsd": {
+                        "type": "number"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "approvedOnly": {
+                    "type": "boolean"
+                  },
+                  "freshOnly": {
+                    "type": "boolean"
+                  },
+                  "coverage": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  },
+                  "mandate": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 5
+                  },
+                  "unknown": {
+                    "type": "boolean"
+                  },
+                  "includeFounderExcluded": {
+                    "type": "boolean"
+                  },
+                  "query": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "candidates": {},
+              "total": {},
+              "shown": {},
+              "empty": {},
+              "profileVersion": {},
+              "policyVersion": {},
+              "evaluatedAt": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "candidates",
+              "total",
+              "shown",
+              "empty",
+              "profileVersion",
+              "policyVersion",
+              "evaluatedAt"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fit.evaluate",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Evaluates one investor against the startup's current profile and evidence and records the evaluation with every input version. Identical inputs return the existing evaluation; changed inputs create a new one and never alter an earlier one.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "investorKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "investorKey"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluation": {},
+          "reused": {},
+          "previous": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluation",
+          "reused",
+          "previous"
+        ]
+      },
+      "authorization": [
+        "evaluation.run"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Evaluates one investor against the startup's current profile and evidence and records the evaluation with every input version. Identical inputs return the existing evaluation; changed inputs create a new one and never alter an earlier one.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "investorKey": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "investorKey"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluation": {},
+              "reused": {},
+              "previous": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluation",
+              "reused",
+              "previous"
+            ]
+          },
+          "authorization": [
+            "evaluation.run"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fit.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "A recorded evaluation with its explanation, and whether its inputs are still current.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluationId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "evaluation": {},
+          "staleness": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "evaluation",
+          "staleness"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "A recorded evaluation with its explanation, and whether its inputs are still current.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluationId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluationId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "evaluation": {},
+              "staleness": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "evaluation",
+              "staleness"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "fit.history",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Recorded evaluations for a startup, newest first, optionally for one investor.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "investorKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Recorded evaluations for a startup, newest first, optionally for one investor.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "investorKey": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
       "name": "inbox.list",
       "versions": [
         1
@@ -5287,6 +5877,380 @@
       ]
     },
     {
+      "name": "shortlist.list",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The startup's private shortlist with each investor's latest evaluation, whether it is still current, and its prioritised recommended actions.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "includeRemoved": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The startup's private shortlist with each investor's latest evaluation, whether it is still current, and its prioritised recommended actions.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "includeRemoved": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "items": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "items"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shortlist.plan",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Open recommended actions across the shortlist, in priority order. Recommendations about the startup's materials, not predictions.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "actions": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "actions"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Open recommended actions across the shortlist, in priority order. Recommendations about the startup's materials, not predictions.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "actions": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "actions"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shortlist.save",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Adds an investor to the startup's private shortlist, or restores a removed one.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "investorKey": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "considering",
+              "ready",
+              "parked",
+              "ruled_out"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "investorKey"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "entry"
+        ]
+      },
+      "authorization": [
+        "startup.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Adds an investor to the startup's private shortlist, or restores a removed one.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "investorKey": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "considering",
+                  "ready",
+                  "parked",
+                  "ruled_out"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "investorKey"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "entry": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "entry"
+            ]
+          },
+          "authorization": [
+            "startup.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "shortlist.update",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Changes a shortlist entry's status or note, marks recommended actions done or dismissed, or removes it. Fenced on expectedVersion.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entryId": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "considering",
+              "ready",
+              "parked",
+              "ruled_out"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "actions": {},
+          "remove": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "entryId",
+          "expectedVersion"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "entry"
+        ]
+      },
+      "authorization": [
+        "startup.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Changes a shortlist entry's status or note, marks recommended actions done or dismissed, or removes it. Fenced on expectedVersion.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "entryId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "considering",
+                  "ready",
+                  "parked",
+                  "ruled_out"
+                ]
+              },
+              "note": {
+                "type": "string"
+              },
+              "actions": {},
+              "remove": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "entryId",
+              "expectedVersion"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "entry": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "entry"
+            ]
+          },
+          "authorization": [
+            "startup.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
       "name": "source.get",
       "versions": [
         1
@@ -6430,6 +7394,198 @@
           "idempotency": "unsupported",
           "concurrency": {
             "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "startup.profile.get",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "The startup's private profile (current version, its content with per-field provenance, and the version history).",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "startup": {},
+          "version": {},
+          "content": {},
+          "versions": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "startup",
+          "version",
+          "content",
+          "versions"
+        ]
+      },
+      "authorization": [
+        "invest.read"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "parallel"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "The startup's private profile (current version, its content with per-field provenance, and the version history).",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "startup": {},
+              "version": {},
+              "content": {},
+              "versions": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "startup",
+              "version",
+              "content",
+              "versions"
+            ]
+          },
+          "authorization": [
+            "invest.read"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "parallel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "startup.profile.save",
+      "versions": [
+        1
+      ],
+      "latestVersion": 1,
+      "description": "Saves the startup profile as a new immutable version, fenced on expectedVersion (0 for the first). Saving identical content creates no new version. Unknown and not-applicable are valid field states.",
+      "kind": "request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "startupId": {
+            "type": "string"
+          },
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "content": {},
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "startupId",
+          "expectedVersion",
+          "content"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "unchanged": {},
+          "version": {},
+          "content": {},
+          "versions": {}
+        },
+        "additionalProperties": false,
+        "required": [
+          "unchanged",
+          "version",
+          "content",
+          "versions"
+        ]
+      },
+      "authorization": [
+        "startup.write"
+      ],
+      "idempotency": "unsupported",
+      "concurrency": {
+        "mode": "keyed",
+        "key": "startupId"
+      },
+      "definitions": [
+        {
+          "version": 1,
+          "description": "Saves the startup profile as a new immutable version, fenced on expectedVersion (0 for the first). Saving identical content creates no new version. Unknown and not-applicable are valid field states.",
+          "kind": "request",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "startupId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "type": "integer"
+              },
+              "content": {},
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "startupId",
+              "expectedVersion",
+              "content"
+            ]
+          },
+          "outputSchema": {
+            "type": "object",
+            "properties": {
+              "unchanged": {},
+              "version": {},
+              "content": {},
+              "versions": {}
+            },
+            "additionalProperties": false,
+            "required": [
+              "unchanged",
+              "version",
+              "content",
+              "versions"
+            ]
+          },
+          "authorization": [
+            "startup.write"
+          ],
+          "idempotency": "unsupported",
+          "concurrency": {
+            "mode": "keyed",
+            "key": "startupId"
           }
         }
       ]
